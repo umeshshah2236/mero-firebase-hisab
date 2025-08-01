@@ -1,0 +1,23 @@
+import { Stack } from "expo-router";
+import React from "react";
+
+export default function HomeLayout() {
+  return (
+    <Stack screenOptions={{ 
+      headerShown: false,
+      headerTitle: 'Home',
+      title: 'Home' // Force all screens to have 'Home' as title
+    }}>
+      <Stack.Screen name="index" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+      <Stack.Screen name="dashboard" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+      <Stack.Screen name="add-loan" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+      <Stack.Screen name="add-customer" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+      <Stack.Screen name="customer-form" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+      <Stack.Screen name="customer-detail" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+      <Stack.Screen name="add-receive-entry" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+      <Stack.Screen name="add-give-entry" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+      <Stack.Screen name="calculator" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+      <Stack.Screen name="karobar" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+    </Stack>
+  );
+}
