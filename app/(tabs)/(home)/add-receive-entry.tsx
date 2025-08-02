@@ -332,6 +332,17 @@ export default function AddReceiveEntryScreen() {
     );
   };
   
+  const handleGoBack = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.back();
+    }, 100);
+  };
+  
   return (
     <View style={styles.container}>
       <Stack.Screen 
@@ -365,12 +376,7 @@ export default function AddReceiveEntryScreen() {
           <View style={styles.headerCard}>
             <TouchableOpacity 
               style={styles.headerIconContainer}
-              onPress={() => {
-                if (Platform.OS !== 'web') {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }
-                router.back();
-              }}
+              onPress={handleGoBack}
               activeOpacity={0.7}
             >
               <ArrowLeft size={24} color="#059669" />

@@ -282,7 +282,11 @@ export default function KarobarScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    router.back();
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.back();
+    }, 100);
   };
 
   // Responsive header padding with proper back button alignment

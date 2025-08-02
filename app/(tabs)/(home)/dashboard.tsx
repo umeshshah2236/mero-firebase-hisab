@@ -101,7 +101,11 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    router.push('/(tabs)/(home)/add-customer');
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.push('/(tabs)/(home)/add-customer');
+    }, 100);
   };
 
   const handleRefresh = async (forceRefresh: boolean = false) => {
@@ -228,20 +232,19 @@ const DashboardScreen = React.memo(function DashboardScreen() {
 
   const handlePersonPress = (person: PersonSummary) => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     
-    // Find the customer data to get the phone number
-    const customerData = customers.find(c => c.name === person.name);
-    
-    // Navigate to customer detail page
-    router.push({
-      pathname: '/(tabs)/(home)/customer-detail',
-      params: {
-        customerName: person.name,
-        customerPhone: customerData?.phone || '' // Pass the actual phone number
-      }
-    });
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.push({
+        pathname: '/(tabs)/(home)/customer-detail',
+        params: {
+          customerName: person.name,
+          customerPhone: person.name // Using name as phone for now
+        }
+      });
+    }, 100);
   };
 
 

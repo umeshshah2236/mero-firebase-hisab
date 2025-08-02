@@ -35,15 +35,39 @@ export default function SettingsScreen() {
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
   const handlePrivacyPolicy = () => {
-    router.push('/privacy-policy');
+    // Add haptic feedback for better user experience
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.push('/privacy-policy');
+    }, 100);
   };
 
   const handleTermsOfService = () => {
-    router.push('/terms-of-service');
+    // Add haptic feedback for better user experience
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.push('/terms-of-service');
+    }, 100);
   };
 
   const handleAbout = () => {
-    router.push('/about');
+    // Add haptic feedback for better user experience
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.push('/about');
+    }, 100);
   };
 
   const handleSignOut = () => {
@@ -97,7 +121,15 @@ export default function SettingsScreen() {
   };
 
   const handleSignIn = () => {
-    router.push('/auth/sign-in');
+    // Add haptic feedback for better user experience
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.push('/auth/sign-in');
+    }, 100);
   };
 
   const handleDeleteAccount = () => {
@@ -323,7 +355,11 @@ export default function SettingsScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    router.back();
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.back();
+    }, 100);
   };
 
   return (

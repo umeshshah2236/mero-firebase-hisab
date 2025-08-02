@@ -78,7 +78,11 @@ export default function ResultsScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    router.back();
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.back();
+    }, 100);
   };
 
   const getLocalizedMonthName = (monthIndex: number) => {
@@ -333,6 +337,18 @@ export default function ResultsScreen() {
                 fontSize: getResponsiveSize(16, 18, 20),
               }]}>
                 {formatTimePeriod()}
+              </Text>
+            </View>
+            <View style={[styles.timeRow, { marginBottom: 0 }]}>
+              <Text style={[styles.timeLabel, {
+                fontSize: getResponsiveSize(16, 18, 20),
+              }]}>
+                {t('totalDays')}:
+              </Text>
+              <Text style={[styles.timeValue, {
+                fontSize: getResponsiveSize(16, 18, 20),
+              }]}>
+                {formatNumber(totalDays, 'en')} {totalDays === 1 ? t('day') : t('days')} ({t('calendarDays')})
               </Text>
             </View>
           </View>

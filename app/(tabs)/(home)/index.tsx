@@ -109,7 +109,11 @@ export default function HomeScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    router.push(route as any);
+    
+    // Add a small delay for smoother transition with slower animation
+    setTimeout(() => {
+      router.push(route as any);
+    }, 100);
   };
 
   const handleTrackLoansPress = () => {
@@ -117,14 +121,17 @@ export default function HomeScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Check authentication state
-    if (!isAuthenticated) {
-      // Redirect to sign in screen
-      router.push('/auth/sign-in');
-    } else {
-      // User is authenticated, redirect to dashboard
-      router.push('/(tabs)/(home)/dashboard');
-    }
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      // Check authentication state
+      if (!isAuthenticated) {
+        // Redirect to sign in screen
+        router.push('/auth/sign-in');
+      } else {
+        // User is authenticated, redirect to dashboard
+        router.push('/(tabs)/(home)/dashboard');
+      }
+    }, 100);
   };
 
   const getGreeting = () => {

@@ -55,6 +55,7 @@ const translations = {
     months: 'months',
     day: 'day',
     days: 'days',
+    calendarDays: 'calendar days',
     
     // Interest types
     yearlyInterest: 'Yearly Interest',
@@ -399,6 +400,7 @@ This app is perfect for financial planning, loan calculations, and investment pr
     months: 'महिनाहरू',
     day: 'दिन',
     days: 'दिनहरू',
+    calendarDays: 'क्यालेन्डर दिनहरू',
     
     // Interest types
     yearlyInterest: 'वार्षिक ब्याज',

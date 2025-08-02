@@ -298,6 +298,17 @@ export default function AddCustomerScreen() {
     }
   };
 
+  const handleGoBack = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.back();
+    }, 100);
+  };
+
 
 
 
@@ -343,7 +354,7 @@ export default function AddCustomerScreen() {
                     width: getResponsiveSize(40, 44, 48),
                     height: getResponsiveSize(40, 44, 48),
                   }]} 
-                  onPress={() => router.back()}
+                  onPress={handleGoBack}
                 >
                   <ArrowLeft size={getResponsiveSize(20, 24, 26)} color="white" />
                 </TouchableOpacity>
@@ -535,7 +546,7 @@ export default function AddCustomerScreen() {
                   width: getResponsiveSize(40, 44, 48),
                   height: getResponsiveSize(40, 44, 48),
                 }]} 
-                onPress={() => router.back()}
+                onPress={handleGoBack}
               >
                 <ArrowLeft size={getResponsiveSize(20, 24, 26)} color="white" />
               </TouchableOpacity>

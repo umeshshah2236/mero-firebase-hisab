@@ -318,11 +318,15 @@ export default function AddLoanScreen() {
     }
   };
 
-  const handleCancel = () => {
+  const handleGoBack = () => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    router.back();
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.back();
+    }, 100);
   };
 
   return (
@@ -351,7 +355,7 @@ export default function AddLoanScreen() {
           <View style={styles.headerContainer}>
             <TouchableOpacity
               style={styles.cancelButton}
-              onPress={handleCancel}
+              onPress={handleGoBack}
               activeOpacity={0.7}
             >
               <X size={24} color="white" />

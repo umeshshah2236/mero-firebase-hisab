@@ -94,7 +94,8 @@ function RootLayoutNav() {
       <Stack screenOptions={{ 
         headerBackTitle: "Back",
         gestureEnabled: true,
-        animation: 'slide_from_right'
+        animation: 'slide_from_right',
+        animationDuration: 400, // Slower animation
       }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen 
@@ -102,14 +103,40 @@ function RootLayoutNav() {
           options={{ 
             headerShown: false, 
             headerBackVisible: false,
-            gestureEnabled: false // Disable swipe back from login
+            gestureEnabled: true, // Enable gesture for smoother back navigation
+            gestureDirection: 'horizontal',
+            animation: 'slide_from_right',
+            animationDuration: 500, // Even slower for sign-in
           }} 
         />
         <Stack.Screen 
           name="auth/sign-up" 
           options={{ 
             headerShown: false,
-            gestureEnabled: true
+            gestureEnabled: true,
+            gestureDirection: 'horizontal',
+            animation: 'slide_from_right',
+            animationDuration: 450,
+          }} 
+        />
+        <Stack.Screen 
+          name="(tabs)/(home)/calculator" 
+          options={{ 
+            headerShown: false,
+            gestureEnabled: true,
+            gestureDirection: 'horizontal',
+            animation: 'slide_from_right',
+            animationDuration: 600, // Slower animation for calculator
+          }} 
+        />
+        <Stack.Screen 
+          name="(tabs)/(home)/karobar" 
+          options={{ 
+            headerShown: false,
+            gestureEnabled: true,
+            gestureDirection: 'horizontal',
+            animation: 'slide_from_right',
+            animationDuration: 600, // Slower animation for karobar
           }} 
         />
         <Stack.Screen name="privacy-policy" options={{ presentation: 'modal' }} />

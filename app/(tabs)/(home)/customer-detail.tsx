@@ -520,90 +520,102 @@ export default function CustomerDetailScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    // Find the customer by name to get their ID
-    const customerToReceive = customers.find(c => c.name === customerName);
     
-    if (!customerToReceive) {
-      Alert.alert('Error', 'Customer not found');
-      return;
-    }
-    
-    // Navigate to Add Receive Entry screen
-    console.log('TO RECEIVE pressed for:', customerName, 'with ID:', customerToReceive.id);
-    router.push({
-      pathname: '/(tabs)/(home)/add-receive-entry',
-      params: {
-        customerName,
-        customerPhone,
-        customerId: customerToReceive.id
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      // Find the customer by name to get their ID
+      const customerToReceive = customers.find(c => c.name === customerName);
+      
+      if (!customerToReceive) {
+        Alert.alert('Error', 'Customer not found');
+        return;
       }
-    });
+      
+      // Navigate to Add Receive Entry screen
+      console.log('TO RECEIVE pressed for:', customerName, 'with ID:', customerToReceive.id);
+      router.push({
+        pathname: '/(tabs)/(home)/add-receive-entry',
+        params: {
+          customerName,
+          customerPhone,
+          customerId: customerToReceive.id
+        }
+      });
+    }, 100);
   };
 
   const handleToGive = () => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    // Find the customer by name to get their ID
-    const customerToGive = customers.find(c => c.name === customerName);
     
-    if (!customerToGive) {
-      Alert.alert('Error', 'Customer not found');
-      return;
-    }
-    
-    // Navigate to Add Give Entry screen
-    console.log('TO GIVE pressed for:', customerName, 'with ID:', customerToGive.id);
-    router.push({
-      pathname: '/(tabs)/(home)/add-give-entry',
-      params: {
-        customerName,
-        customerPhone,
-        customerId: customerToGive.id
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      // Find the customer by name to get their ID
+      const customerToGive = customers.find(c => c.name === customerName);
+      
+      if (!customerToGive) {
+        Alert.alert('Error', 'Customer not found');
+        return;
       }
-    });
+      
+      // Navigate to Add Give Entry screen
+      console.log('TO GIVE pressed for:', customerName, 'with ID:', customerToGive.id);
+      router.push({
+        pathname: '/(tabs)/(home)/add-give-entry',
+        params: {
+          customerName,
+          customerPhone,
+          customerId: customerToGive.id
+        }
+      });
+    }, 100);
   };
 
   const handleEditTransaction = (entry: TransactionEntry) => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    console.log('Edit button clicked for entry:', entry);
-    console.log('Available transaction entries:', transactionEntries);
     
-    // Find the corresponding transaction entry from the transaction entries
-    const transactionEntry = transactionEntries.find(transaction => transaction.id === entry.id);
-    
-    if (transactionEntry) {
-      console.log('Found transaction entry for editing:', transactionEntry);
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      console.log('Edit button clicked for entry:', entry);
+      console.log('Available transaction entries:', transactionEntries);
       
-      // Navigate to dedicated edit screen based on transaction type
-      const editParams = {
-        customerName,
-        customerPhone,
-        editTransactionId: transactionEntry.id,
-        editAmount: transactionEntry.amount.toString(),
-        editDescription: transactionEntry.description || '',
-        editDate: transactionEntry.transaction_date
-      };
+      // Find the corresponding transaction entry from the transaction entries
+      const transactionEntry = transactionEntries.find(transaction => transaction.id === entry.id);
       
-      console.log('Navigating with edit params:', editParams);
-      
-      if (entry.type === 'received') {
-        router.push({
-          pathname: '/(tabs)/(home)/edit-receive-entry',
-          params: editParams
-        });
+      if (transactionEntry) {
+        console.log('Found transaction entry for editing:', transactionEntry);
+        
+        // Navigate to dedicated edit screen based on transaction type
+        const editParams = {
+          customerName,
+          customerPhone,
+          editTransactionId: transactionEntry.id,
+          editAmount: transactionEntry.amount.toString(),
+          editDescription: transactionEntry.description || '',
+          editDate: transactionEntry.transaction_date
+        };
+        
+        console.log('Navigating with edit params:', editParams);
+        
+        if (entry.type === 'received') {
+          router.push({
+            pathname: '/(tabs)/(home)/edit-receive-entry',
+            params: editParams
+          });
+        } else {
+          router.push({
+            pathname: '/(tabs)/(home)/edit-give-entry',
+            params: editParams
+          });
+        }
       } else {
-        router.push({
-          pathname: '/(tabs)/(home)/edit-give-entry',
-          params: editParams
-        });
+        console.error('Could not find transaction entry for editing:', entry.id);
+        Alert.alert('Error', 'Could not find transaction for editing');
       }
-    } else {
-      console.error('Could not find transaction entry for editing:', entry.id);
-      Alert.alert('Error', 'Could not find transaction for editing');
-    }
+    }, 100);
   };
 
   const handleDeleteTransaction = async (entry: TransactionEntry) => {
@@ -733,6 +745,17 @@ export default function CustomerDetailScreen() {
     );
   };
 
+  const handleGoBack = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.back();
+    }, 100);
+  };
+
   return (
     <View style={styles.container}>
       <Stack.Screen 
@@ -742,7 +765,7 @@ export default function CustomerDetailScreen() {
           headerTintColor: 'white',
           headerLeft: () => (
             <TouchableOpacity
-              onPress={() => router.back()}
+              onPress={handleGoBack}
               style={styles.backButton}
             >
               <ArrowLeft size={24} color="white" />

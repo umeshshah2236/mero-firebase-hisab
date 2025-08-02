@@ -312,6 +312,17 @@ export default function CustomerFormScreen() {
   const headerPaddingBottom = getResponsiveSize(20, 24, 28);
   const headerPaddingHorizontal = getResponsiveSize(16, 20, 24);
 
+  const handleGoBack = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.back();
+    }, 100);
+  };
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -342,7 +353,7 @@ export default function CustomerFormScreen() {
                   width: getResponsiveSize(40, 44, 48),
                   height: getResponsiveSize(40, 44, 48),
                 }]} 
-                onPress={() => router.back()}
+                onPress={handleGoBack}
               >
                 <ArrowLeft size={getResponsiveSize(20, 24, 26)} color="white" />
               </TouchableOpacity>

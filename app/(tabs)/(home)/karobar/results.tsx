@@ -86,7 +86,11 @@ export default function KarobarResultsScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    router.back();
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.back();
+    }, 100);
   };
 
   const getLocalizedMonthName = (monthIndex: number) => {

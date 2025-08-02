@@ -221,14 +221,23 @@ export default function SignInScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    router.back();
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      // Navigate directly to settings instead of using router.back()
+      router.push('/(tabs)/settings');
+    }, 100);
   };
 
   const handleSignUp = () => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    router.push('/auth/sign-up');
+    
+    // Add a small delay for smoother transition
+    setTimeout(() => {
+      router.push('/auth/sign-up');
+    }, 100);
   };
 
 
