@@ -88,51 +88,9 @@ export default function TabLayout() {
         }}
         listeners={{
           tabPress: (e) => {
-            const currentTime = Date.now();
-            
-            // Prevent double-click within 500ms
-            if (currentTime - lastPressTime.current < 500 || isProcessingPress.current) {
-              e.preventDefault();
-              return;
-            }
-            
-            // Set processing flag to prevent rapid successive presses
-            isProcessingPress.current = true;
-            lastPressTime.current = currentTime;
-            
-            // Reset processing flag after a short delay
-            setTimeout(() => {
-              isProcessingPress.current = false;
-            }, 300);
-            
-            // Add haptic feedback
+            // Add haptic feedback only - no navigation logic
             if (Platform.OS !== 'web') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }
-            
-            // Handle navigation based on authentication state
-            e.preventDefault();
-            
-            if (isAuthenticated) {
-              // Check if already on dashboard - if so, don't navigate
-              if (pathname === '/(tabs)/(home)/dashboard') {
-                console.log('Already on dashboard - preventing navigation');
-                return;
-              }
-              
-              // For authenticated users, navigate to dashboard (Customer List page)
-              console.log('Home button pressed - navigating to dashboard');
-              router.replace('/(tabs)/(home)/dashboard');
-            } else {
-              // Check if already on home index - if so, don't navigate
-              if (pathname === '/(tabs)/(home)') {
-                console.log('Already on home index - preventing navigation');
-                return;
-              }
-              
-              // For non-authenticated users, navigate to home index (calculator page)
-              console.log('Home button pressed - navigating to calculator');
-              router.replace('/(tabs)/(home)');
             }
           },
         }}

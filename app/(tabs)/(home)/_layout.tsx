@@ -6,7 +6,11 @@ export default function HomeLayout() {
     <Stack screenOptions={{ 
       headerShown: false,
       headerTitle: 'Home',
-      title: 'Home' // Force all screens to have 'Home' as title
+      title: 'Home', // Force all screens to have 'Home' as title
+      gestureEnabled: true,
+      gestureDirection: 'horizontal',
+      animation: 'slide_from_right',
+      animationDuration: 1000, // Much slower animation for all home screens
     }}>
       <Stack.Screen name="index" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
       <Stack.Screen name="dashboard" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />

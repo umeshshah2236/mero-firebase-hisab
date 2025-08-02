@@ -106,14 +106,16 @@ export default function HomeScreen() {
   }, [isAuthenticated, authLoading]);
 
   const handleFeaturePress = (route: string) => {
+    // Add haptic feedback for better user experience
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Add a small delay for smoother transition with slower animation
+    // Add a longer delay for smoother transition
     setTimeout(() => {
+      // Use push with longer delay for smoother navigation
       router.push(route as any);
-    }, 100);
+    }, 200);
   };
 
   const handleTrackLoansPress = () => {
