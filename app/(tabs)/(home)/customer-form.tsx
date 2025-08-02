@@ -36,11 +36,20 @@ export default function CustomerFormScreen() {
   const params = useLocalSearchParams();
   
   // Check if we're in edit mode
-  const isEditMode = params.editMode === 'true';
+  const editModeParam = params.editMode;
+  const isEditMode = editModeParam === 'true';
   const customerId = params.customerId as string || '';
   const originalCustomerName = params.customerName as string || '';
   const originalPhoneNumber = params.customerPhone as string || '';
   const focusPhone = params.focusPhone === 'true'; // Check if we should focus on phone field
+  
+  console.log('=== CUSTOMER FORM INITIALIZATION ===');
+  console.log('All params:', params);
+  console.log('editModeParam:', editModeParam, 'type:', typeof editModeParam);
+  console.log('isEditMode:', isEditMode);
+  console.log('customerId:', customerId, 'type:', typeof customerId);
+  console.log('originalCustomerName:', originalCustomerName);
+  console.log('originalPhoneNumber:', originalPhoneNumber);
   
   const [customerName, setCustomerName] = useState(originalCustomerName);
   const [phoneNumber, setPhoneNumber] = useState(() => {
@@ -98,13 +107,32 @@ export default function CustomerFormScreen() {
     const formattedPhone = phoneNumber.trim() ? '+977' + phoneNumber.trim() : null;
     
     try {
-      if (isEditMode) {
+      console.log('=== CUSTOMER FORM: Starting save process ===');
+      console.log('isEditMode:', isEditMode, 'type:', typeof isEditMode);
+      console.log('customerId:', customerId, 'type:', typeof customerId);
+      console.log('customerName:', customerName.trim());
+      console.log('formattedPhone:', formattedPhone);
+      console.log('customerType:', customerType);
+      console.log('editModeParam value:', editModeParam);
+      console.log('editModeParam === "true":', editModeParam === 'true');
+      console.log('Boolean(editModeParam):', Boolean(editModeParam));
+      
+      // Additional check: if we have a customerId, we should be in edit mode
+      const shouldBeEditMode = Boolean(customerId);
+      console.log('shouldBeEditMode (based on customerId):', shouldBeEditMode);
+      
+      if (isEditMode || shouldBeEditMode) {
         // Use the customer ID passed from the detail page
         if (!customerId) {
+          console.error('ERROR: Customer ID is missing for edit mode');
           throw new Error('Customer ID is required for editing');
         }
         
-        console.log('Updating existing customer with ID:', customerId);
+        console.log('=== UPDATING EXISTING CUSTOMER ===');
+        console.log('Customer ID:', customerId);
+        console.log('Customer name:', customerName.trim());
+        console.log('Phone:', formattedPhone);
+        console.log('Type:', customerType);
         
         // Update existing customer - ensure name is provided
         const result = await updateCustomer(customerId, {
@@ -113,7 +141,8 @@ export default function CustomerFormScreen() {
           customer_type: customerType,
         });
         
-        console.log('Customer updated successfully:', result);
+        console.log('=== CUSTOMER UPDATE SUCCESS ===');
+        console.log('Result:', result);
         
         // Show success message and navigate back to home page
         Alert.alert(
@@ -130,6 +159,11 @@ export default function CustomerFormScreen() {
           ]
         );
       } else {
+        console.log('=== ADDING NEW CUSTOMER ===');
+        console.log('Customer name:', customerName.trim());
+        console.log('Phone:', formattedPhone);
+        console.log('Type:', customerType);
+        
         // Add new customer (duplicate check is now handled in the context)
         const result = await addCustomer({
           name: customerName.trim(),
@@ -137,7 +171,8 @@ export default function CustomerFormScreen() {
           customer_type: customerType,
         });
         
-        console.log('Customer added successfully:', result);
+        console.log('=== CUSTOMER ADD SUCCESS ===');
+        console.log('Result:', result);
 
         // Navigate to customer detail page after successful save
         router.replace({

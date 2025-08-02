@@ -414,6 +414,118 @@ export const firestoreHelpers = {
       throw error;
     }
   },
+
+  // Get transaction entries by customer name
+  async getTransactionEntriesByCustomerName(userId: string, customerName: string): Promise<TransactionEntry[]> {
+    try {
+      console.log('=== GETTING TRANSACTION ENTRIES BY CUSTOMER NAME ===');
+      console.log('User ID:', userId);
+      console.log('Customer Name:', customerName);
+      
+      const q = query(
+        collection(db, 'transaction_entries'),
+        where('user_id', '==', userId),
+        where('customer_name', '==', customerName)
+      );
+      const querySnapshot = await getDocs(q);
+      const entries = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log('Found transaction entries for customer:', entries.length);
+      return entries as TransactionEntry[];
+    } catch (error) {
+      console.error('Error getting transaction entries by customer name:', error);
+      throw error;
+    }
+  },
+
+  // Delete user profile
+  async deleteUserProfile(userId: string) {
+    try {
+      console.log('=== DELETING USER PROFILE ===');
+      console.log('User ID:', userId);
+      
+      const profileRef = doc(db, 'profiles', userId);
+      await deleteDoc(profileRef);
+      
+      console.log('User profile deleted successfully');
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting user profile:', error);
+      throw error;
+    }
+  },
+
+  // Delete all data for a user (comprehensive deletion)
+  async deleteAllUserData(userId: string) {
+    try {
+      console.log('=== DELETING ALL USER DATA ===');
+      console.log('User ID:', userId);
+      
+      const deletionResults = {
+        customers: 0,
+        transactions: 0,
+        profile: false,
+        errors: []
+      };
+
+      // 1. Delete all customers
+      try {
+        const customers = await this.getCustomers(userId);
+        console.log('Found customers to delete:', customers.length);
+        deletionResults.customers = customers.length;
+        
+        for (const customer of customers) {
+          await this.deleteCustomer(customer.id);
+        }
+        console.log('All customers deleted successfully');
+      } catch (error) {
+        console.error('Error deleting customers:', error);
+        deletionResults.errors.push(`Customers: ${error}`);
+      }
+
+      // 2. Delete all transaction entries
+      try {
+        const transactions = await this.getTransactionEntries(userId);
+        console.log('Found transactions to delete:', transactions.length);
+        deletionResults.transactions = transactions.length;
+        
+        for (const transaction of transactions) {
+          await this.deleteTransactionEntry(transaction.id);
+        }
+        console.log('All transactions deleted successfully');
+      } catch (error) {
+        console.error('Error deleting transactions:', error);
+        deletionResults.errors.push(`Transactions: ${error}`);
+      }
+
+      // 3. Delete user profile
+      try {
+        await this.deleteUserProfile(userId);
+        deletionResults.profile = true;
+        console.log('User profile deleted successfully');
+      } catch (error) {
+        console.error('Error deleting user profile:', error);
+        deletionResults.errors.push(`Profile: ${error}`);
+      }
+
+      console.log('=== USER DATA DELETION SUMMARY ===');
+      console.log('Customers deleted:', deletionResults.customers);
+      console.log('Transactions deleted:', deletionResults.transactions);
+      console.log('Profile deleted:', deletionResults.profile);
+      console.log('Errors:', deletionResults.errors);
+
+      return { 
+        success: true, 
+        data: deletionResults 
+      };
+    } catch (error) {
+      console.error('Error in comprehensive user data deletion:', error);
+      throw error;
+    }
+  },
 };
 
 export default firebaseApp; 

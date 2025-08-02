@@ -53,6 +53,12 @@ export default function CustomerDetailScreen() {
   const [networkError, setNetworkError] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   
+  // State to prevent blinking - maintain previous data while loading new data
+  const [displayedTransactionEntries, setDisplayedTransactionEntries] = useState<DBTransactionEntry[]>([]);
+  // Track previous data to compare for changes
+  const [previousTransactionCount, setPreviousTransactionCount] = useState(0);
+  const [previousTotalAmount, setPreviousTotalAmount] = useState(0);
+  
   const getCustomerTransactions = useCallback(
     async (customerName: string) => {
       if (!transactionEntriesContext?.getCustomerTransactions) {
@@ -62,6 +68,25 @@ export default function CustomerDetailScreen() {
     },
     [transactionEntriesContext]
   );
+
+  // Function to check if data has actually changed
+  const hasDataChanged = useCallback((newEntries: DBTransactionEntry[]) => {
+    const currentTransactionCount = newEntries.length;
+    const currentTotalAmount = newEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    
+    const hasChanged = currentTransactionCount !== previousTransactionCount || 
+                      currentTotalAmount !== previousTotalAmount;
+    
+    console.log('Data change check:', {
+      currentTransactionCount,
+      previousTransactionCount,
+      currentTotalAmount,
+      previousTotalAmount,
+      hasChanged
+    });
+    
+    return hasChanged;
+  }, [previousTransactionCount, previousTotalAmount]);
 
   
   const customerName = params.customerName as string || 'Customer';
@@ -216,22 +241,38 @@ export default function CustomerDetailScreen() {
     }
   }, [user, setFirebaseUser, transactionEntriesContext]);
 
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    setNetworkError(false);
+  // Background refresh function - exactly like dashboard
+  const handleBackgroundRefresh = useCallback(async () => {
+    console.log('Customer detail: handleBackgroundRefresh called');
     
     try {
-      console.log('Customer detail: Refreshing all data...');
-      // Refresh transaction entries
-      if (customerName) {
-        console.log('Customer detail: Refreshing transaction entries for:', customerName);
+      console.log('Customer detail: Starting data refresh...');
+      
+      if (customerName && user) {
+        console.log('Customer detail: Fetching transaction entries for:', customerName);
         try {
           const entries = await getCustomerTransactions(customerName);
-          console.log('Refreshed transaction entries:', entries.length);
+          console.log('Customer detail: Data fetched successfully');
+          console.log('Customer detail: Entries count:', entries.length);
+          
+          // Always update the data (like dashboard does)
           setTransactionEntries(entries);
+          setDisplayedTransactionEntries(entries);
+          
+          // Check if data has actually changed for logging
+          const dataChanged = hasDataChanged(entries);
+          if (dataChanged) {
+            console.log('Customer detail: Data has changed, updating content');
+            // Update previous values for next comparison
+            setPreviousTransactionCount(entries.length);
+            setPreviousTotalAmount(entries.reduce((sum, entry) => sum + entry.amount, 0));
+          } else {
+            console.log('Customer detail: No data changes detected');
+          }
+          
           setNetworkError(false); // Clear network error on successful fetch
         } catch (error) {
-          console.error('Error refreshing transaction entries:', error);
+          console.error('Customer detail: Error refreshing data:', error);
           // Check if it's a network error
           if (error instanceof Error && 
               (error.message.includes('Network request failed') || 
@@ -242,7 +283,54 @@ export default function CustomerDetailScreen() {
         }
       }
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      console.error('Customer detail: Error in background refresh:', error);
+      // Check if it's a network error
+      if (error instanceof Error && 
+          (error.message.includes('Network request failed') || 
+           error.message.includes('Failed to fetch') ||
+           error.message.includes('timeout'))) {
+        setNetworkError(true);
+      }
+    }
+  }, [getCustomerTransactions, customerName, user, hasDataChanged]);
+
+  // Manual refresh function - shows loading indicators
+  const handleRefresh = useCallback(async () => {
+    console.log('Manual refresh called');
+    setIsRefreshing(true);
+    setNetworkError(false);
+    
+    try {
+      console.log('Customer detail: Manual refreshing all data...');
+      // Refresh transaction entries
+      if (customerName && user) {
+        console.log('Customer detail: Manual refreshing transaction entries for:', customerName);
+        try {
+          const entries = await getCustomerTransactions(customerName);
+          console.log('Manual refreshed transaction entries:', entries.length);
+          
+          // For manual refresh, always update displayed content
+          setTransactionEntries(entries);
+          setDisplayedTransactionEntries(entries);
+          
+          // Update previous values for next comparison
+          setPreviousTransactionCount(entries.length);
+          setPreviousTotalAmount(entries.reduce((sum, entry) => sum + entry.amount, 0));
+          
+          setNetworkError(false); // Clear network error on successful fetch
+        } catch (error) {
+          console.error('Error manual refreshing transaction entries:', error);
+          // Check if it's a network error
+          if (error instanceof Error && 
+              (error.message.includes('Network request failed') || 
+               error.message.includes('Failed to fetch') ||
+               error.message.includes('timeout'))) {
+            setNetworkError(true);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error manual refreshing data:', error);
       // Check if it's a network error
       if (error instanceof Error && 
           (error.message.includes('Network request failed') || 
@@ -253,52 +341,40 @@ export default function CustomerDetailScreen() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [getCustomerTransactions, customerName]);
+  }, [getCustomerTransactions, customerName, user]);
 
-  // Refresh data when screen comes into focus - but only if no data exists
+  // Track if screen is focused
+  const [isScreenFocused, setIsScreenFocused] = useState(false);
+
+  // Track if screen is focused (but don't refresh)
   useFocusEffect(
     React.useCallback(() => {
-      const shouldRefresh = user && transactionEntries.length === 0;
-      if (shouldRefresh) {
-        console.log('Customer detail focused, refreshing transaction entries...');
-        handleRefresh();
-      }
-    }, [user, handleRefresh, transactionEntries.length])
+      console.log('Customer detail: Screen focused');
+      setIsScreenFocused(true);
+      
+      return () => {
+        console.log('Customer detail: Screen unfocused');
+        setIsScreenFocused(false);
+      };
+    }, [])
   );
 
-  // Load transaction entries on mount and when customer changes
+  // Initial data load when component mounts
   useEffect(() => {
-    if (customerName && user) {
-      const loadTransactionEntries = async () => {
-        try {
-          console.log('Loading transaction entries for customer:', customerName);
-          console.log('Current user:', user?.id);
-          
-          const entries = await getCustomerTransactions(customerName);
-          console.log('Loaded transaction entries:', entries.length);
-          setTransactionEntries(entries);
-          setNetworkError(false); // Clear network error on successful fetch
-        } catch (error) {
-          console.error('Error loading transaction entries:', error);
-          // Check if it's a network error
-          if (error instanceof Error && 
-              (error.message.includes('Network request failed') || 
-               error.message.includes('Failed to fetch') ||
-               error.message.includes('timeout'))) {
-            setNetworkError(true);
-          }
-        }
-      };
-      loadTransactionEntries();
-    } else if (customerName && !user) {
-      console.log('Customer name provided but no user available, waiting for user...');
+    if (user && customerName) {
+      console.log('Customer detail: Initial data load');
+      handleBackgroundRefresh();
     }
-  }, [customerName, getCustomerTransactions, user]);
+  }, [user, customerName]);
+
+
+
+
 
   // Get customer transactions and calculate running balance
   const customerTransactions = useMemo(() => {
-    // Use the new transaction entries instead of loans
-    const customerTransactions = transactionEntries.filter(transaction => 
+    // Use displayed transaction entries to prevent blinking
+    const customerTransactions = displayedTransactionEntries.filter(transaction => 
       transaction.customer_name.toLowerCase() === customerName.toLowerCase()
     );
 
@@ -349,7 +425,7 @@ export default function CustomerDetailScreen() {
       const dateB = new Date(entryB?.created_at || b.date).getTime();
       return dateB - dateA; // Newest first
     });
-  }, [transactionEntries, customerName, formatNepaliDateTime]);
+  }, [displayedTransactionEntries, customerName, formatNepaliDateTime]);
 
   // Group transactions by date
   const groupedTransactions = useMemo(() => {
@@ -358,7 +434,7 @@ export default function CustomerDetailScreen() {
 
     customerTransactions.forEach(transaction => {
               // Use the transaction's created_at timestamp for grouping instead of transaction_date
-        const transactionEntry = transactionEntries.find(entry => entry.id === transaction.id);
+        const transactionEntry = displayedTransactionEntries.find(entry => entry.id === transaction.id);
         let groupingDate: Date;
         let dateKey: string;
         
@@ -646,8 +722,8 @@ export default function CustomerDetailScreen() {
             try {
               if (transactionEntriesContext?.deleteTransactionEntry) {
                 await transactionEntriesContext.deleteTransactionEntry(transactionEntry.id);
-                console.log('Transaction deleted successfully, refreshing data...');
-                await handleRefresh();
+                console.log('Transaction deleted successfully, background refreshing data...');
+                await handleBackgroundRefresh();
                 Alert.alert('Success', 'Transaction deleted successfully');
               }
             } catch (error) {
@@ -671,21 +747,33 @@ export default function CustomerDetailScreen() {
     console.log('Edit customer pressed for:', customerName);
     
     // Find the customer by name to get their ID
-    const customerToEdit = customers.find(c => c.name === customerName);
+    // Use case-insensitive search to be more reliable
+    const customerToEdit = customers.find(c => 
+      c.name.toLowerCase().trim() === customerName.toLowerCase().trim()
+    );
     
     if (!customerToEdit) {
+      console.error('Customer not found for editing:', customerName);
+      console.log('Available customers:', customers.map(c => ({ id: c.id, name: c.name })));
       Alert.alert('Error', 'Customer not found for editing');
       return;
     }
     
+    console.log('Found customer to edit:', customerToEdit);
+    
+    const navigationParams = {
+      editMode: 'true',
+      customerId: customerToEdit.id,
+      customerName: customerToEdit.name, // Use the exact name from database
+      customerPhone: customerToEdit.phone || ''
+    };
+    
+    console.log('=== NAVIGATING TO CUSTOMER FORM ===');
+    console.log('Navigation params:', navigationParams);
+    
     router.push({
       pathname: '/(tabs)/(home)/customer-form',
-      params: {
-        editMode: 'true',
-        customerId: customerToEdit.id,
-        customerName,
-        customerPhone
-      }
+      params: navigationParams
     });
   };
 
@@ -919,7 +1007,7 @@ export default function CustomerDetailScreen() {
                     <View style={styles.dayEntriesContainer}>
                       {dayGroup.entries.map((entry, index) => {
                         // Find corresponding transaction entry for edit functionality
-                        const transactionEntry = transactionEntries.find(te => 
+                        const transactionEntry = displayedTransactionEntries.find(te => 
                           te.amount === entry.amount && 
                           te.transaction_type === entry.type &&
                           Math.abs(new Date(te.transaction_date).getTime() - new Date(entry.date).getTime()) < 24 * 60 * 60 * 1000 // Within 24 hours
@@ -1096,12 +1184,12 @@ export default function CustomerDetailScreen() {
         }}
         transaction={selectedTransaction}
         onTransactionUpdated={async () => {
-          console.log('Transaction updated, refreshing data immediately...');
-          await handleRefresh();
+          console.log('Transaction updated, background refreshing data immediately...');
+          await handleBackgroundRefresh();
         }}
         onTransactionDeleted={async () => {
-          console.log('Transaction deleted, refreshing data immediately...');
-          await handleRefresh();
+          console.log('Transaction deleted, background refreshing data immediately...');
+          await handleBackgroundRefresh();
         }}
       />
     </View>
@@ -1647,5 +1735,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
+
 
 });

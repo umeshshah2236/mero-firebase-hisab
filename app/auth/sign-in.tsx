@@ -119,15 +119,8 @@ export default function SignInScreen() {
         return;
       }
 
-      // For existing users, just send OTP for verification
-      // For new users, redirect to sign-up
-      if (!userCheck.exists) {
-        // User doesn't exist, redirect to sign-up with phone number pre-filled
-        router.push(`/auth/sign-up?phone=${encodeURIComponent(cleanPhone)}`);
-        setIsLoading(false);
-        return;
-      }
-      // If user exists, continue with OTP sending (this is the normal flow)
+      // For both new and existing users, send OTP for verification
+      // The system will automatically create account if user doesn't exist
     }
 
     const result = await sendOtp(cleanPhone);
@@ -229,16 +222,7 @@ export default function SignInScreen() {
     }, 100);
   };
 
-  const handleSignUp = () => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    
-    // Add a small delay for smoother transition
-    setTimeout(() => {
-      router.push('/auth/sign-up');
-    }, 100);
-  };
+
 
 
 
@@ -297,7 +281,7 @@ export default function SignInScreen() {
                   marginTop: getResponsiveSize(2, 4, 6),
                   marginBottom: getResponsiveSize(4, 6, 8),
                 }]}>
-                  {isOtpSent ? 'Enter the verification code sent to your phone' : 'Sign in to your account'}
+                  {isOtpSent ? 'Enter the verification code sent to your phone' : 'Sign In or Create Account'}
                 </Text>
               </View>
               
@@ -466,56 +450,38 @@ export default function SignInScreen() {
               </View>
             )}
             
-            {/* Action Button */}
-            <TouchableOpacity 
-              style={[styles.signInButton, {
-                minHeight: getResponsiveSize(48, 52, 56),
-                opacity: (isLoading || (isOtpSent && otpExpired)) ? 0.7 : 1,
-              }]} 
-              onPress={() => {
-                Keyboard.dismiss();
-                setTimeout(() => {
-                  isOtpSent ? handleVerifyOtp() : handleSendOtp(false);
-                }, 100);
-              }}
-              disabled={isLoading || (isOtpSent && otpExpired)}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['#2563eb', '#1d4ed8']}
-                style={styles.buttonGradient}
-              >
-                <Text style={[styles.signInButtonText, {
-                  fontSize: getResponsiveSize(14, 15, 16),
-                }]}>
-                  {isLoading 
-                    ? (isOtpSent ? 'Verifying...' : 'Sending OTP...') 
-                    : (isOtpSent ? 'Verify OTP' : 'Send OTP')
-                  }
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                         {/* Action Button */}
+             <TouchableOpacity 
+               style={[styles.signInButton, {
+                 minHeight: getResponsiveSize(48, 52, 56),
+                 opacity: (isLoading || (isOtpSent && otpExpired)) ? 0.7 : 1,
+                 marginBottom: getResponsiveSize(24, 28, 32),
+               }]} 
+               onPress={() => {
+                 Keyboard.dismiss();
+                 setTimeout(() => {
+                   isOtpSent ? handleVerifyOtp() : handleSendOtp(false);
+                 }, 100);
+               }}
+               disabled={isLoading || (isOtpSent && otpExpired)}
+               activeOpacity={0.8}
+             >
+               <LinearGradient
+                 colors={['#2563eb', '#1d4ed8']}
+                 style={styles.buttonGradient}
+               >
+                 <Text style={[styles.signInButtonText, {
+                   fontSize: getResponsiveSize(14, 15, 16),
+                 }]}>
+                   {isLoading 
+                     ? (isOtpSent ? 'Verifying...' : 'Sending OTP...') 
+                     : (isOtpSent ? 'Verify OTP' : 'Send OTP')
+                   }
+                 </Text>
+               </LinearGradient>
+             </TouchableOpacity>
 
-            {/* Sign Up Link */}
-            <View style={[styles.signUpContainer, {
-              marginTop: getResponsiveSize(24, 28, 32),
-              marginBottom: getResponsiveSize(12, 16, 20),
-            }]}>
-              <Text style={[styles.signUpText, { 
-                color: isDark ? theme.colors.textSecondary : '#64748b',
-                fontSize: getResponsiveSize(14, 15, 16),
-              }]}>
-                Don't have an account?{' '}
-              </Text>
-              <TouchableOpacity onPress={handleSignUp}>
-                <Text style={[styles.signUpLink, { 
-                  color: '#2563eb',
-                  fontSize: getResponsiveSize(14, 15, 16),
-                }]}>
-                  Sign Up
-                </Text>
-              </TouchableOpacity>
-            </View>
+
 
 
           </View>
@@ -647,15 +613,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
-  signUpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  signUpText: {
-    // Dynamic styles applied inline
-  },
-  signUpLink: {
-    fontWeight: '600',
-  },
+
 });

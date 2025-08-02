@@ -66,11 +66,7 @@ function RootLayoutNav() {
         return false; // Let system handle (exit app)
       }
       
-      if (pathname === '/auth/sign-up') {
-        // Go back to sign-in from sign-up
-        router.replace('/auth/sign-in');
-        return true;
-      }
+
       
       if (isAuthenticated) {
         // After login flow - prevent going back to auth screens
@@ -109,16 +105,7 @@ function RootLayoutNav() {
             animationDuration: 1000, // Much slower for sign-in
           }} 
         />
-        <Stack.Screen 
-          name="auth/sign-up" 
-          options={{ 
-            headerShown: false,
-            gestureEnabled: true,
-            gestureDirection: 'horizontal',
-            animation: 'slide_from_right',
-            animationDuration: 1000, // Much slower for sign-up
-          }} 
-        />
+
 
         <Stack.Screen name="privacy-policy" options={{ presentation: 'modal' }} />
         <Stack.Screen name="terms-of-service" options={{ presentation: 'modal' }} />

@@ -157,7 +157,8 @@ export default function AddReceiveEntryScreen() {
           {
             text: t('ok'),
             onPress: () => {
-              router.push({
+              // Navigate back to customer detail page
+              router.replace({
                 pathname: '/(tabs)/(home)/customer-detail',
                 params: {
                   customerName,
@@ -199,7 +200,8 @@ export default function AddReceiveEntryScreen() {
           {
             text: t('ok'),
             onPress: () => {
-              router.push({
+              // Navigate back to customer detail page
+              router.replace({
                 pathname: '/(tabs)/(home)/customer-detail',
                 params: {
                   customerName,
@@ -310,13 +312,8 @@ export default function AddReceiveEntryScreen() {
                 {
                   text: t('ok'),
                   onPress: () => {
-                    router.push({
-                      pathname: '/(tabs)/(home)/customer-detail',
-                      params: {
-                        customerName,
-                        customerPhone
-                      }
-                    });
+                    // Navigate back to dashboard to refresh customer list
+                    router.replace('/(tabs)/(home)/dashboard');
                   }
                 }
               ]);

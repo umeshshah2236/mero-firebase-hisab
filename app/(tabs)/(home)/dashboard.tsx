@@ -46,6 +46,8 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
   const [transactionEntries, setTransactionEntries] = useState<TransactionEntry[]>([]);
+  const [forceUpdate, setForceUpdate] = useState(0);
+  const [hasFreshTransactionData, setHasFreshTransactionData] = useState(false);
 
   // Redirect to home if user is not authenticated - optimized for smooth transitions
   useEffect(() => {
@@ -70,18 +72,95 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     }
   }, [firebaseUser, setFirebaseUser, setCustomersFirebaseUser]);
 
-  // Only refresh data on first load - no automatic refresh on focus
+  // Track if screen is focused
+  const [isScreenFocused, setIsScreenFocused] = useState(false);
+
+  // Track if screen is focused and refresh transaction data
   useFocusEffect(
     React.useCallback(() => {
-      if (isAuthenticated && user && !hasInitiallyLoaded && !hasRedirected) {
-        console.log('Dashboard: Loading data for authenticated user');
-        handleRefresh().finally(() => {
-          setHasInitiallyLoaded(true);
+      console.log('Dashboard: Screen focused');
+      setIsScreenFocused(true);
+      
+      // Always refresh transaction data when screen comes into focus
+      if (isAuthenticated && user) {
+        console.log('Dashboard: Refreshing transaction data on focus');
+        // Force refresh transaction entries to ensure latest data
+                  getAllTransactionEntries().then((entries) => {
+            console.log('Dashboard: Refreshed transaction entries on focus:', entries.length);
+            setTransactionEntries(entries || []);
+            setHasFreshTransactionData(true);
+            
+            // Force a re-render by updating state
+            setTimeout(() => {
+              console.log('Dashboard: Forcing re-render after transaction refresh');
+              setTransactionEntries([...entries || []]);
+              setForceUpdate(prev => prev + 1);
+            }, 100);
+          }).catch((error) => {
+          console.error('Dashboard: Error refreshing transaction entries on focus:', error);
         });
       }
-      // Removed automatic refresh on focus to prevent layout shifts
-    }, [isAuthenticated, user, hasInitiallyLoaded, hasRedirected])
+      
+      return () => {
+        console.log('Dashboard: Screen unfocused');
+        setIsScreenFocused(false);
+      };
+    }, [isAuthenticated, user])
   );
+
+  // Initial data load only once when component mounts
+  useEffect(() => {
+    if (isAuthenticated && user && !hasRedirected && !hasInitiallyLoaded) {
+      console.log('Dashboard: Initial data load');
+      handleRefresh().finally(() => {
+        setHasInitiallyLoaded(true);
+      });
+    }
+  }, [isAuthenticated, user, hasRedirected, hasInitiallyLoaded]);
+
+  // Force refresh transaction data when component mounts or user changes
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      console.log('Dashboard: Force refreshing transaction data');
+      setHasFreshTransactionData(false); // Reset flag before refreshing
+      getAllTransactionEntries().then((entries) => {
+        console.log('Dashboard: Force refreshed transaction entries:', entries.length);
+        setTransactionEntries(entries || []);
+        setHasFreshTransactionData(true);
+      }).catch((error) => {
+        console.error('Dashboard: Error force refreshing transaction entries:', error);
+      });
+    }
+  }, [isAuthenticated, user]);
+
+  // Refresh transaction data when returning to screen to ensure latest data
+  useEffect(() => {
+    if (isAuthenticated && user && hasInitiallyLoaded) {
+      console.log('Dashboard: Refreshing transaction data to ensure latest data');
+      // Only refresh transaction entries, not customers
+      getAllTransactionEntries().then((entries) => {
+        console.log('Dashboard: Refreshed transaction entries:', entries.length);
+        setTransactionEntries(entries || []);
+        setHasFreshTransactionData(true);
+      }).catch((error) => {
+        console.error('Dashboard: Error refreshing transaction entries:', error);
+      });
+    }
+  }, [isAuthenticated, user, hasInitiallyLoaded]);
+
+  // Additional effect to refresh when screen focus changes
+  useEffect(() => {
+    if (isScreenFocused && isAuthenticated && user) {
+      console.log('Dashboard: Screen is focused, ensuring fresh transaction data');
+              getAllTransactionEntries().then((entries) => {
+          console.log('Dashboard: Refreshed transaction entries on screen focus:', entries.length);
+          setTransactionEntries(entries || []);
+          setHasFreshTransactionData(true);
+        }).catch((error) => {
+        console.error('Dashboard: Error refreshing transaction entries on screen focus:', error);
+      });
+    }
+  }, [isScreenFocused, isAuthenticated, user]);
 
   // Don't render anything if user is not authenticated or still loading auth
   if (authLoading || !isAuthenticated) {
@@ -109,29 +188,41 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   };
 
   const handleRefresh = async (forceRefresh: boolean = false) => {
+    console.log('Dashboard: handleRefresh called, forceRefresh:', forceRefresh);
+    
     // Only show refreshing state for pull-to-refresh, not background refreshes
     if (forceRefresh) {
       setRefreshing(true);
     }
     
     try {
+      console.log('Dashboard: Starting data refresh...');
+      
       // Check if we need to refresh the session first
       if (transactionError && transactionError.includes('session has expired')) {
+        console.log('Dashboard: Refreshing session...');
         const sessionRefreshResult = await refreshSession();
         if (!sessionRefreshResult.success) {
+          console.log('Dashboard: Session refresh failed');
           return;
         }
       }
       
       // Always refresh data silently in background
+      console.log('Dashboard: Fetching customers and transactions...');
       const [customersResult, transactionsResult] = await Promise.all([
         fetchCustomers(true),
         getAllTransactionEntries()
       ]);
       
+      console.log('Dashboard: Data fetched successfully');
+      console.log('Dashboard: Customers count:', Array.isArray(customersResult) ? customersResult.length : 0);
+      console.log('Dashboard: Transactions count:', Array.isArray(transactionsResult) ? transactionsResult.length : 0);
+      
       // Update transaction entries state
       setTransactionEntries(transactionsResult || []);
     } catch (error) {
+      console.error('Dashboard: Error refreshing data:', error);
       // Handle errors silently for background refreshes
     } finally {
       if (forceRefresh) {
@@ -144,6 +235,27 @@ const DashboardScreen = React.memo(function DashboardScreen() {
 
   // Create customer summaries combining database customers with transaction data
   const getCustomerSummaries = (): PersonSummary[] => {
+    console.log('Dashboard: Calculating customer summaries');
+    console.log('Customers loaded:', customers.length);
+    console.log('Transactions loaded:', transactionEntries.length);
+    console.log('Has fresh transaction data:', hasFreshTransactionData);
+    
+    // Don't show "All settled" if we don't have fresh transaction data
+    if (!hasFreshTransactionData && customers.length > 0) {
+      console.log('Dashboard: No fresh transaction data available, showing empty list to prevent "All settled" flicker');
+      return [];
+    }
+    
+    // Log some sample transaction data for debugging
+    if (transactionEntries.length > 0) {
+      console.log('Sample transactions:', transactionEntries.slice(0, 3).map(t => ({
+        customer_name: t.customer_name,
+        amount: t.amount,
+        type: t.transaction_type,
+        date: t.transaction_date
+      })));
+    }
+    
     const customerMap = new Map<string, PersonSummary>();
     
     // First, add all customers from database
@@ -161,6 +273,13 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     
     // Then, process all transaction entries for balance calculation
     transactionEntries.forEach((transaction: TransactionEntry) => {
+      console.log('Processing transaction:', {
+        customer_name: transaction.customer_name,
+        amount: transaction.amount,
+        type: transaction.transaction_type,
+        balance_impact: transaction.transaction_type === 'given' ? transaction.amount : -transaction.amount
+      });
+      
       const existing = customerMap.get(transaction.customer_name);
       const balanceImpact = transaction.transaction_type === 'given'
         ? transaction.amount
@@ -175,6 +294,12 @@ const DashboardScreen = React.memo(function DashboardScreen() {
           existing.lastTransactionDate = transactionUpdatedAt;
         }
         existing.status = existing.netBalance !== 0 ? 'active' : 'settled';
+        
+        console.log('Updated customer balance:', {
+          name: existing.name,
+          net_balance: existing.netBalance,
+          status: existing.status
+        });
       } else {
         // Customer not in database but has transactions - add them
         customerMap.set(transaction.customer_name, {
@@ -185,6 +310,12 @@ const DashboardScreen = React.memo(function DashboardScreen() {
           lastTransactionDate: transaction.updated_at || transaction.transaction_date,
           status: balanceImpact !== 0 ? 'active' : 'settled',
           transactions: [transaction]
+        });
+        
+        console.log('Added new customer from transaction:', {
+          name: transaction.customer_name,
+          net_balance: balanceImpact,
+          status: balanceImpact !== 0 ? 'active' : 'settled'
         });
       }
     });
@@ -227,6 +358,13 @@ const DashboardScreen = React.memo(function DashboardScreen() {
 
 
   const allCustomers = getCustomerSummaries();
+  
+  // Force re-calculation when transaction data changes
+  useEffect(() => {
+    console.log('Dashboard: Transaction data changed, recalculating customer summaries');
+    console.log('Current transaction count:', transactionEntries.length);
+    console.log('Force update count:', forceUpdate);
+  }, [transactionEntries, forceUpdate]);
   
   const filteredCustomers = filterPersons(allCustomers, searchQuery);
 

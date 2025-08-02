@@ -370,7 +370,8 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
     transactionId: string,
     amount: number,
     transactionType: 'given' | 'received',
-    description?: string
+    description?: string,
+    transactionDate?: string
   ): Promise<TransactionEntry> => {
     if (!firebaseUser) {
       throw new Error('Your account session has expired. Please sign out and sign in again.');
@@ -387,6 +388,7 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
         amount: amount,
         transaction_type: transactionType,
         description: description?.trim() || null,
+        ...(transactionDate && { transaction_date: transactionDate }),
       };
 
       const result = await firestoreHelpers.updateTransactionEntry(transactionId, updateData);
@@ -406,7 +408,7 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
         amount: amount,
         transaction_type: transactionType,
         description: description?.trim() || null,
-        transaction_date: new Date().toISOString(),
+        transaction_date: transactionDate || new Date().toISOString(),
         balance_after: 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

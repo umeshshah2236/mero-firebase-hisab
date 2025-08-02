@@ -116,11 +116,19 @@ export default function EditGiveEntryScreen() {
       // Convert selected date to BS date string format
       const bsDateString = `${selectedDate.year}-${selectedDate.month.toString().padStart(2, '0')}-${selectedDate.day.toString().padStart(2, '0')}`;
       
+      console.log('=== UPDATING TRANSACTION WITH NEW DATE ===');
+      console.log('Selected date:', selectedDate);
+      console.log('BS date string:', bsDateString);
+      console.log('Transaction ID:', editTransactionId);
+      console.log('Amount:', parseFloat(formData.amount));
+      console.log('Description:', formData.itemDescription);
+      
       await updateTransactionEntry(
         editTransactionId,
         parseFloat(formData.amount),
         'given',
-        formData.itemDescription || undefined
+        formData.itemDescription || undefined,
+        bsDateString
       );
       
       console.log('Give entry updated successfully');

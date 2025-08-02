@@ -445,7 +445,14 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
 
   const deleteAccount = async (): Promise<{ success: boolean; error?: string }> => {
     try {
-      if (!user?.id) {
+      console.log('=== DELETE ACCOUNT START ===');
+      console.log('Context user:', user);
+      console.log('Firebase user:', firebaseUser);
+      console.log('Auth current user:', auth.currentUser);
+      
+      // Check both context user and Firebase user
+      if (!user?.id && !firebaseUser?.uid) {
+        console.error('No user logged in - both context and Firebase user are null');
         return { success: false, error: 'No user logged in' };
       }
 
@@ -456,28 +463,49 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
         return { success: false, error: `Connection failed: ${connectionTest.error}` };
       }
 
-      const currentUser = auth.currentUser;
+      // Get the current Firebase user
+      let currentUser = auth.currentUser || firebaseUser;
       if (!currentUser) {
+        console.error('No Firebase user available for deletion');
         return { success: false, error: 'No user logged in' };
       }
-
-      // Delete user data from Firestore first
+      
+      // Ensure the user is properly authenticated
+      if (!currentUser.uid && !currentUser.id) {
+        console.error('Firebase user has no UID or ID');
+        return { success: false, error: 'User authentication is invalid' };
+      }
+      
+      // Try to refresh the user session if needed
       try {
-        // Delete user profile
-        await firestoreHelpers.deleteCustomer(user.id);
+        await currentUser.reload();
+        currentUser = auth.currentUser || firebaseUser;
+        console.log('User session refreshed successfully');
+      } catch (reloadError) {
+        console.warn('Failed to reload user session:', reloadError);
+        // Continue with deletion even if reload fails
+      }
+
+      // Get the user ID for data deletion
+      const userId = currentUser.uid || currentUser.id || user?.id;
+      if (!userId) {
+        console.error('No user ID available for data deletion');
+        return { success: false, error: 'No user ID available' };
+      }
+      
+      console.log('Using user ID for data deletion:', userId);
+      
+      // Delete ALL user data from Firestore first
+      try {
+        console.log('=== COMPREHENSIVE USER DATA DELETION ===');
         
-        // Delete all user's customers
-        const customers = await firestoreHelpers.getCustomers(user.id);
-        for (const customer of customers) {
-          await firestoreHelpers.deleteCustomer(customer.id);
-        }
+        const deletionResult = await firestoreHelpers.deleteAllUserData(userId);
         
-        // Delete all user's transaction entries
-        const allTransactions = await firestoreHelpers.getTransactionEntries(user.id);
-        for (const transaction of allTransactions) {
-          // You might want to add a deleteTransactionEntry helper function
-          // For now, we'll just delete the document
-          // await firestoreHelpers.deleteTransactionEntry(transaction.id);
+        if (deletionResult.success) {
+          console.log('=== USER DATA DELETION SUCCESS ===');
+          console.log('Deletion summary:', deletionResult.data);
+        } else {
+          console.error('User data deletion failed:', deletionResult);
         }
         
       } catch (deleteError) {
@@ -490,10 +518,27 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
 
       console.log('Account deletion successful');
 
-      // Clear local state
-      setUser(null);
-      setFirebaseUser(null);
-      setIsLoading(false);
+      // Clear ALL local state and storage
+      try {
+        // Clear local state
+        setUser(null);
+        setFirebaseUser(null);
+        setIsLoading(false);
+        
+        // Clear AsyncStorage
+        await AsyncStorage.clear();
+        console.log('Local storage cleared successfully');
+        
+        // Clear any cached data
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.clear();
+          console.log('Browser localStorage cleared');
+        }
+        
+      } catch (clearError) {
+        console.warn('Error clearing local storage:', clearError);
+        // Continue even if storage clearing fails
+      }
       
       return { success: true };
     } catch (error) {

@@ -207,9 +207,12 @@ export default function SettingsScreen() {
     setIsDeletingAccount(true);
     
     try {
-      console.log('Starting account deletion...');
+      console.log('=== SETTINGS: Starting account deletion ===');
+      console.log('Current user state:', { user, isAuthenticated });
       
       const result = await deleteAccount();
+      
+      console.log('Delete account result:', result);
       
       if (!result.success) {
         throw new Error(result.error || 'Failed to delete account');
@@ -217,11 +220,11 @@ export default function SettingsScreen() {
 
       // Show success message
       if (Platform.OS === 'web') {
-        window.alert('Your account and all data have been permanently deleted. You will need to sign up again to use the app.');
+        window.alert('Your account has been permanently deleted. All your data including customers, transactions, and profile information have been completely removed from our servers. You will need to sign up again to use the app.');
       } else {
         Alert.alert(
-          'Account Deleted',
-          'Your account and all data have been permanently deleted. You will need to sign up again to use the app.',
+          'Account Permanently Deleted',
+          'Your account has been permanently deleted. All your data including:\n\n• All customers and their information\n• All transaction history\n• Your profile and settings\n• All local app data\n\nEverything has been completely removed from our servers. You will need to sign up again to use the app.',
           [{ text: 'OK' }]
         );
       }

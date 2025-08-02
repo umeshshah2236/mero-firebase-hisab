@@ -241,6 +241,14 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
       console.log('Updates:', updates);
       console.log('Network status:', isOnline ? 'Online' : 'Offline');
       
+      // Find the customer to get the old name
+      const customerToUpdate = customers.find(c => c.id === id);
+      const oldName = customerToUpdate?.name;
+      const newName = updates.name;
+      
+      console.log('Old customer name:', oldName);
+      console.log('New customer name:', newName);
+      
       // If offline, add to pending operations and update local state
       if (!isOnline) {
         console.log('📱 Offline mode: Adding customer update to pending operations');
@@ -271,6 +279,43 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
       setCustomers(prev => 
         prev.map(customer => customer.id === id ? { ...customer, ...updates, updated_at: new Date().toISOString() } : customer)
       );
+      
+      // If the customer name changed, update all related transaction entries
+      if (oldName && newName && oldName !== newName) {
+        console.log('=== UPDATING TRANSACTION ENTRIES FOR NAME CHANGE ===');
+        console.log('Updating transactions from:', oldName, 'to:', newName);
+        
+        try {
+          // Get the user ID for the query
+          const userId = firebaseUser?.uid || firebaseUser?.id;
+          if (!userId) {
+            console.error('No user ID available for transaction update');
+            return;
+          }
+          
+          // Get all transaction entries for the old customer name
+          const transactionEntries = await firestoreHelpers.getTransactionEntriesByCustomerName(userId, oldName);
+          console.log('Found transaction entries to update:', transactionEntries.length);
+          
+          // Update each transaction entry with the new customer name
+          const updatePromises = transactionEntries.map(async (transaction) => {
+            const updateData = {
+              customer_name: newName,
+              updated_at: new Date().toISOString()
+            };
+            
+            console.log('Updating transaction:', transaction.id, 'with new name:', newName);
+            return await firestoreHelpers.updateTransactionEntry(transaction.id, updateData);
+          });
+          
+          await Promise.all(updatePromises);
+          console.log('=== TRANSACTION ENTRIES UPDATED SUCCESSFULLY ===');
+        } catch (transactionError) {
+          console.error('Error updating transaction entries:', transactionError);
+          // Don't throw error here as customer update was successful
+          // Just log the error for debugging
+        }
+      }
       
       console.log('=== UPDATE CUSTOMER SUCCESS ===');
       return { success: true, data: result.data };
