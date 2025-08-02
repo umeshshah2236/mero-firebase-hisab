@@ -38,27 +38,33 @@ export default function CustomerDetailScreen() {
   const { theme } = useTheme();
   const { t } = useLanguage();
   const { user } = useAuth();
-  const { setFirebaseUser } = useTransactionEntries();
+  const { setFirebaseUser, getAllTransactionEntries } = useTransactionEntries();
   const transactionEntriesContext = useTransactionEntries();
   const { deleteCustomer, customers } = useCustomers();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
-  const bounceAnim = useRef(new Animated.Value(0)).current;
-  
+    const bounceAnim = useRef(new Animated.Value(0)).current;
+    
+  const customerName = params.customerName as string || 'Customer';
+  const customerPhone = params.customerPhone as string || '';
+  const initialTransactions = params.transactions ? JSON.parse(params.transactions as string) : [];
+
   // Edit modal state
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<DBTransactionEntry | null>(null);
-  const [transactionEntries, setTransactionEntries] = useState<DBTransactionEntry[]>([]);
+  const [transactionEntries, setTransactionEntries] = useState<DBTransactionEntry[]>(initialTransactions);
   const [expandedTransactionId, setExpandedTransactionId] = useState<string | null>(null);
   const [networkError, setNetworkError] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   
   // State to prevent blinking - maintain previous data while loading new data
-  const [displayedTransactionEntries, setDisplayedTransactionEntries] = useState<DBTransactionEntry[]>([]);
+  const [displayedTransactionEntries, setDisplayedTransactionEntries] = useState<DBTransactionEntry[]>(initialTransactions);
   // Track previous data to compare for changes
-  const [previousTransactionCount, setPreviousTransactionCount] = useState(0);
-  const [previousTotalAmount, setPreviousTotalAmount] = useState(0);
-  
+  const [previousTransactionCount, setPreviousTransactionCount] = useState(initialTransactions.length);
+  const [previousTotalAmount, setPreviousTotalAmount] = useState(
+    initialTransactions.reduce((sum: number, entry: DBTransactionEntry) => sum + entry.amount, 0)
+  );
+
   const getCustomerTransactions = useCallback(
     async (customerName: string) => {
       if (!transactionEntriesContext?.getCustomerTransactions) {
@@ -68,7 +74,7 @@ export default function CustomerDetailScreen() {
     },
     [transactionEntriesContext]
   );
-
+  
   // Function to check if data has actually changed
   const hasDataChanged = useCallback((newEntries: DBTransactionEntry[]) => {
     const currentTransactionCount = newEntries.length;
@@ -88,10 +94,6 @@ export default function CustomerDetailScreen() {
     return hasChanged;
   }, [previousTransactionCount, previousTotalAmount]);
 
-  
-  const customerName = params.customerName as string || 'Customer';
-  const customerPhone = params.customerPhone as string || '';
-  
   console.log('Customer detail: customerName:', customerName);
   console.log('Customer detail: customerPhone:', customerPhone);
 
@@ -249,23 +251,31 @@ export default function CustomerDetailScreen() {
       console.log('Customer detail: Starting data refresh...');
       
       if (customerName && user) {
-        console.log('Customer detail: Fetching transaction entries for:', customerName);
+        console.log('Customer detail: Fetching ALL transaction entries (like dashboard)');
         try {
-          const entries = await getCustomerTransactions(customerName);
-          console.log('Customer detail: Data fetched successfully');
-          console.log('Customer detail: Entries count:', entries.length);
+          // Use getAllTransactionEntries like dashboard does
+          const allEntries = await getAllTransactionEntries();
+          console.log('Customer detail: All data fetched successfully');
+          console.log('Customer detail: All entries count:', allEntries.length);
+          
+          // Filter for this customer locally (like dashboard approach)
+          const customerEntries = allEntries.filter(entry => 
+            entry.customer_name.toLowerCase() === customerName.toLowerCase()
+          );
+          console.log('Customer detail: Filtered entries count:', customerEntries.length);
           
           // Always update the data (like dashboard does)
-          setTransactionEntries(entries);
-          setDisplayedTransactionEntries(entries);
+          setTransactionEntries(customerEntries);
+          setDisplayedTransactionEntries(customerEntries);
+          setHasFreshTransactionData(true);
           
           // Check if data has actually changed for logging
-          const dataChanged = hasDataChanged(entries);
+          const dataChanged = hasDataChanged(customerEntries);
           if (dataChanged) {
             console.log('Customer detail: Data has changed, updating content');
             // Update previous values for next comparison
-            setPreviousTransactionCount(entries.length);
-            setPreviousTotalAmount(entries.reduce((sum, entry) => sum + entry.amount, 0));
+            setPreviousTransactionCount(customerEntries.length);
+            setPreviousTotalAmount(customerEntries.reduce((sum, entry) => sum + entry.amount, 0));
           } else {
             console.log('Customer detail: No data changes detected');
           }
@@ -292,7 +302,7 @@ export default function CustomerDetailScreen() {
         setNetworkError(true);
       }
     }
-  }, [getCustomerTransactions, customerName, user, hasDataChanged]);
+  }, [getAllTransactionEntries, customerName, user, hasDataChanged]);
 
   // Manual refresh function - shows loading indicators
   const handleRefresh = useCallback(async () => {
@@ -304,18 +314,26 @@ export default function CustomerDetailScreen() {
       console.log('Customer detail: Manual refreshing all data...');
       // Refresh transaction entries
       if (customerName && user) {
-        console.log('Customer detail: Manual refreshing transaction entries for:', customerName);
+        console.log('Customer detail: Manual refreshing ALL transaction entries (like dashboard)');
         try {
-          const entries = await getCustomerTransactions(customerName);
-          console.log('Manual refreshed transaction entries:', entries.length);
+          // Use getAllTransactionEntries like dashboard does
+          const allEntries = await getAllTransactionEntries();
+          console.log('Manual refreshed ALL transaction entries:', allEntries.length);
+          
+          // Filter for this customer locally (like dashboard approach)
+          const customerEntries = allEntries.filter(entry => 
+            entry.customer_name.toLowerCase() === customerName.toLowerCase()
+          );
+          console.log('Manual refreshed customer transaction entries:', customerEntries.length);
           
           // For manual refresh, always update displayed content
-          setTransactionEntries(entries);
-          setDisplayedTransactionEntries(entries);
+          setTransactionEntries(customerEntries);
+          setDisplayedTransactionEntries(customerEntries);
+          setHasFreshTransactionData(true);
           
           // Update previous values for next comparison
-          setPreviousTransactionCount(entries.length);
-          setPreviousTotalAmount(entries.reduce((sum, entry) => sum + entry.amount, 0));
+          setPreviousTransactionCount(customerEntries.length);
+          setPreviousTotalAmount(customerEntries.reduce((sum, entry) => sum + entry.amount, 0));
           
           setNetworkError(false); // Clear network error on successful fetch
         } catch (error) {
@@ -345,27 +363,29 @@ export default function CustomerDetailScreen() {
 
   // Track if screen is focused
   const [isScreenFocused, setIsScreenFocused] = useState(false);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(true); // Start as true since we have initial data
+  const [hasRedirected, setHasRedirected] = useState(false);
+  const [forceUpdate, setForceUpdate] = useState(0);
+  const [hasFreshTransactionData, setHasFreshTransactionData] = useState(true); // Start as true
 
-  // Track if screen is focused (but don't refresh)
+
+  // Track if screen is focused and refresh transaction data
   useFocusEffect(
     React.useCallback(() => {
-      console.log('Customer detail: Screen focused');
+      console.log('Customer detail: Screen focused, starting background refresh.');
       setIsScreenFocused(true);
       
+      // Perform a background refresh to get the latest data, but don't block the UI
+      handleBackgroundRefresh();
+
       return () => {
         console.log('Customer detail: Screen unfocused');
         setIsScreenFocused(false);
       };
-    }, [])
+    }, [handleBackgroundRefresh])
   );
 
-  // Initial data load when component mounts
-  useEffect(() => {
-    if (user && customerName) {
-      console.log('Customer detail: Initial data load');
-      handleBackgroundRefresh();
-    }
-  }, [user, customerName]);
+
 
 
 
@@ -373,6 +393,16 @@ export default function CustomerDetailScreen() {
 
   // Get customer transactions and calculate running balance
   const customerTransactions = useMemo(() => {
+    console.log('Customer detail: Calculating customer transactions');
+    console.log('Displayed transaction entries:', displayedTransactionEntries.length);
+    console.log('Has fresh transaction data:', hasFreshTransactionData);
+    
+    // Don't show data if we don't have fresh transaction data (like dashboard)
+    if (!hasFreshTransactionData && displayedTransactionEntries.length > 0) {
+      console.log('Customer detail: No fresh transaction data available, showing empty list to prevent flicker');
+      return [];
+    }
+    
     // Use displayed transaction entries to prevent blinking
     const customerTransactions = displayedTransactionEntries.filter(transaction => 
       transaction.customer_name.toLowerCase() === customerName.toLowerCase()
@@ -554,6 +584,28 @@ export default function CustomerDetailScreen() {
 
     return groups;
   }, [customerTransactions, formatNepaliDate, transactionEntries, t]);
+
+  // Force re-calculation when transaction data changes
+  useEffect(() => {
+    console.log('Customer detail: Transaction data changed, recalculating customer transactions');
+    console.log('Current transaction count:', displayedTransactionEntries.length);
+    console.log('Force update count:', forceUpdate);
+  }, [displayedTransactionEntries, forceUpdate]);
+
+  // Calculate customer balance directly (like dashboard approach)
+  // Always calculate balance - no loading dependencies
+  let customerBalance = 0;
+  
+  const customerBalanceTransactions = displayedTransactionEntries.filter(transaction => 
+    transaction.customer_name.toLowerCase() === customerName.toLowerCase()
+  );
+  
+  customerBalanceTransactions.forEach(transaction => {
+    const balanceImpact = transaction.transaction_type === 'given' 
+      ? transaction.amount  // YOU GAVE: customer owes you more
+      : -transaction.amount; // YOU GOT: customer owes you less
+    customerBalance += balanceImpact;
+  });
 
 
 
@@ -885,7 +937,17 @@ export default function CustomerDetailScreen() {
             
             <View style={styles.customerInfo}>
               <View style={styles.nameAndActions}>
-                <Text style={styles.customerNameText}>{getFirstName(customerName)}</Text>
+                <Text 
+                  style={[
+                    styles.customerNameText, 
+                    Platform.OS === 'android' && styles.androidResponsiveName
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={Platform.OS === 'android'}
+                  minimumFontScale={Platform.OS === 'android' ? 0.7 : 1}
+                >
+                  {getFirstName(customerName)}
+                </Text>
                 <View style={styles.actionButtonsRow}>
                   <TouchableOpacity
                     style={styles.modernActionButton}
@@ -914,55 +976,53 @@ export default function CustomerDetailScreen() {
             </View>
           </View>
           
-          {/* Balance Display */}
-          {customerTransactions.length > 0 && (
-            <View style={styles.balanceDisplaySection}>
-              <Text style={styles.balanceLabel}>{t('netBalance')}</Text>
-              <Text style={styles.balanceAmount}>
-                रु{Math.abs(customerTransactions[0]?.balance || 0).toLocaleString()}
-              </Text>
-              <View style={styles.balanceIndicator}>
-                {(customerTransactions[0]?.balance || 0) > 0 ? (
-                  <>
-                    <View style={[styles.balanceIcon, { backgroundColor: '#DCFCE7' }]}>
-                      <TrendingUp size={14} color="#059669" strokeWidth={2.5} />
-                    </View>
-                    <Text style={[styles.balanceStatus, { color: '#059669' }]}>{t('toReceive')}</Text>
-                  </>
-                ) : (customerTransactions[0]?.balance || 0) < 0 ? (
-                  <>
-                    <View style={[styles.balanceIcon, { backgroundColor: '#FEE2E2' }]}>
-                      <TrendingDown size={14} color="#DC2626" strokeWidth={2.5} />
-                    </View>
-                    <Text style={[styles.balanceStatus, { color: '#DC2626' }]}>{t('toGive')}</Text>
-                  </>
-                ) : (
-                  <>
-                    <View style={[styles.balanceIcon, { backgroundColor: '#F3F4F6' }]}>
-                      <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: '#9CA3AF' }} />
-                    </View>
-                    <Text style={[styles.balanceStatus, { color: '#6B7280' }]}>Settled</Text>
-                  </>
-                )}
-              </View>
+          {/* Balance Display - Always show like dashboard */}
+          <View style={styles.balanceDisplaySection}>
+            <Text style={styles.balanceLabel}>{t('netBalance')}</Text>
+            <Text style={styles.balanceAmount}>
+              रु{Math.abs(customerBalance).toLocaleString()}
+            </Text>
+            <View style={styles.balanceIndicator}>
+              {customerBalance > 0 ? (
+                <>
+                  <View style={[styles.balanceIcon, { backgroundColor: '#DCFCE7' }]}>
+                    <TrendingUp size={14} color="#059669" strokeWidth={2.5} />
+                  </View>
+                  <Text style={[styles.balanceStatus, { color: '#059669' }]}>{t('toReceive')}</Text>
+                </>
+              ) : customerBalance < 0 ? (
+                <>
+                  <View style={[styles.balanceIcon, { backgroundColor: '#FEE2E2' }]}>
+                    <TrendingDown size={14} color="#DC2626" strokeWidth={2.5} />
+                  </View>
+                  <Text style={[styles.balanceStatus, { color: '#DC2626' }]}>{t('toGive')}</Text>
+                </>
+              ) : (
+                <>
+                  <View style={[styles.balanceIcon, { backgroundColor: '#F3F4F6' }]}>
+                    <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: '#9CA3AF' }} />
+                  </View>
+                  <Text style={[styles.balanceStatus, { color: '#6B7280' }]}>Settled</Text>
+                </>
+              )}
             </View>
-          )}
+          </View>
         </View>
       </View>
 
       <SafeAreaView style={[styles.content, { backgroundColor: theme.colors.background }]}>
-        {/* Network Status Indicator */}
-        <NetworkStatus 
-          isOnline={!networkError} 
-          onRetry={() => {
-            console.log('Network retry requested');
-            handleRefresh();
-          }}
-        />
+        {/* FIXED SECTION - Network Status and Transaction History Header */}
+        <View style={styles.fixedTopSection}>
+          {/* Network Status Indicator */}
+          <NetworkStatus 
+            isOnline={!networkError} 
+            onRetry={() => {
+              console.log('Network retry requested');
+              handleRefresh();
+            }}
+          />
 
-
-        {/* Transaction History Header */}
-        {customerTransactions.length > 0 && (
+          {/* Transaction History Header - Always show like dashboard */}
           <View style={styles.historyHeaderContainer}>
             <View style={styles.historyHeader}>
               <Clock size={20} color={theme.colors.textSecondary} />
@@ -972,144 +1032,144 @@ export default function CustomerDetailScreen() {
               {t('tapEditButton')}
             </Text>
           </View>
-        )}
+        </View>
 
-        {/* Main Content Area */}
-        <View style={styles.contentArea}>
-          <ScrollView 
-            style={styles.transactionsList}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={isRefreshing}
-                onRefresh={handleRefresh}
-                tintColor={theme.colors.primary}
-                colors={[theme.colors.primary]}
-              />
-            }
-          >
+        {/* SCROLLABLE SECTION - Transaction List Only */}
+        <ScrollView 
+          style={styles.scrollableTransactionList}
+          contentContainerStyle={styles.transactionListContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={theme.colors.primary}
+              colors={[theme.colors.primary]}
+            />
+          }
+        >
+            {/* Transaction Entries - Always show content like dashboard */}
             {customerTransactions.length > 0 ? (
-              <>              
-                {/* Transaction Entries */}
-                {groupedTransactions.map((dayGroup) => (
-                  <View key={dayGroup.date} style={styles.dayGroupContainer}>
-                    {/* Date Header */}
-                    <View style={[styles.dateHeader, { 
-                      backgroundColor: theme.colors.surface,
-                      borderBottomColor: theme.colors.border,
-                      borderBottomWidth: 1
-                    }]}>
-                      <Calendar size={16} color={theme.colors.textSecondary} />
-                      <Text style={[styles.dateHeaderText, { color: theme.colors.text }]}>{dayGroup.displayDate}</Text>
-                    </View>
-                    
-                    {/* Entries for this date */}
-                    <View style={styles.dayEntriesContainer}>
-                      {dayGroup.entries.map((entry, index) => {
-                        // Find corresponding transaction entry for edit functionality
-                        const transactionEntry = displayedTransactionEntries.find(te => 
-                          te.amount === entry.amount && 
-                          te.transaction_type === entry.type &&
-                          Math.abs(new Date(te.transaction_date).getTime() - new Date(entry.date).getTime()) < 24 * 60 * 60 * 1000 // Within 24 hours
-                        );
-                        
-                        return (
-                          <View key={entry.id} style={[styles.modernTransactionCard, {
-                            backgroundColor: theme.colors.card,
-                            borderBottomColor: theme.colors.border
-                          }]}>
-                            {/* Left Border Indicator */}
-                            <View style={[
-                              styles.leftBorderIndicator,
-                              { backgroundColor: entry.type === 'given' ? '#EF4444' : '#10B981' }
-                            ]} />
-                            
-                            {/* Main Card Content */}
-                            <View style={styles.modernCardContent}>
-                              {/* Left Side - Icon and Transaction Info */}
-                              <View style={styles.leftSection}>
-                                <View style={[
-                                  styles.modernTransactionIcon,
-                                  { backgroundColor: entry.type === 'given' ? '#FEF2F2' : '#F0FDF4' }
+              // Show transaction entries when we have transactions (like dashboard approach)
+              groupedTransactions.map((dayGroup) => (
+                <View key={dayGroup.date} style={styles.dayGroupContainer}>
+                  {/* Date Header */}
+                  <View style={[styles.dateHeader, { 
+                    backgroundColor: theme.colors.surface,
+                    borderBottomColor: theme.colors.border,
+                    borderBottomWidth: 1
+                  }]}>
+                    <Calendar size={16} color={theme.colors.textSecondary} />
+                    <Text style={[styles.dateHeaderText, { color: theme.colors.text }]}>{dayGroup.displayDate}</Text>
+                  </View>
+                  
+                  {/* Entries for this date */}
+                  <View style={styles.dayEntriesContainer}>
+                    {dayGroup.entries.map((entry, index) => {
+                      // Find corresponding transaction entry for edit functionality
+                      const transactionEntry = displayedTransactionEntries.find(te => 
+                        te.amount === entry.amount && 
+                        te.transaction_type === entry.type &&
+                        Math.abs(new Date(te.transaction_date).getTime() - new Date(entry.date).getTime()) < 24 * 60 * 60 * 1000 // Within 24 hours
+                      );
+                      
+                      return (
+                        <View key={entry.id} style={[styles.modernTransactionCard, {
+                          backgroundColor: theme.colors.card,
+                          borderBottomColor: theme.colors.border
+                        }]}>
+                          {/* Left Border Indicator */}
+                          <View style={[
+                            styles.leftBorderIndicator,
+                            { backgroundColor: entry.type === 'given' ? '#EF4444' : '#10B981' }
+                          ]} />
+                          
+                          {/* Main Card Content */}
+                          <View style={styles.modernCardContent}>
+                            {/* Left Side - Icon and Transaction Info */}
+                            <View style={styles.leftSection}>
+                              <View style={[
+                                styles.modernTransactionIcon,
+                                { backgroundColor: entry.type === 'given' ? '#FEF2F2' : '#F0FDF4' }
+                              ]}>
+                                {entry.type === 'given' ? (
+                                  <TrendingUp size={16} color="#EF4444" strokeWidth={2} />
+                                ) : (
+                                  <TrendingDown size={16} color="#10B981" strokeWidth={2} />
+                                )}
+                              </View>
+                              
+                              <View style={styles.transactionInfo}>
+                                <Text style={[
+                                  styles.modernTransactionType,
+                                  { color: entry.type === 'given' ? '#EF4444' : '#10B981' }
                                 ]}>
-                                  {entry.type === 'given' ? (
-                                    <TrendingUp size={16} color="#EF4444" strokeWidth={2} />
-                                  ) : (
-                                    <TrendingDown size={16} color="#10B981" strokeWidth={2} />
-                                  )}
-                                </View>
+                                  {entry.type === 'given' ? t('youGave') : t('youReceived')}
+                                </Text>
                                 
-                                <View style={styles.transactionInfo}>
+                                <Text style={[styles.modernTransactionTime, { color: theme.colors.textSecondary }]}>
+                                  {entry.time}
+                                </Text>
+                                
+                                {entry.description && (
+                                  <Text style={[styles.modernTransactionDescription, { color: theme.colors.textSecondary }]}>
+                                    {entry.description}
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                            
+                            {/* Right Side - Amount, Balance and Edit Button */}
+                            <View style={styles.rightSection}>
+                              <View style={styles.amountSection}>
+                                <Text style={[
+                                  styles.modernTransactionAmount,
+                                  { color: entry.type === 'given' ? '#EF4444' : '#10B981' }
+                                ]}>
+                                  रु {entry.amount.toLocaleString()}
+                                </Text>
+                                
+                                <View style={[
+                                  styles.modernBalanceChip,
+                                  { backgroundColor: entry.balance > 0 ? '#DCFCE7' : entry.balance < 0 ? '#FEE2E2' : '#F3F4F6' }
+                                ]}>
                                   <Text style={[
-                                    styles.modernTransactionType,
-                                    { color: entry.type === 'given' ? '#EF4444' : '#10B981' }
+                                    styles.modernBalanceText,
+                                    { color: entry.balance > 0 ? '#059669' : entry.balance < 0 ? '#DC2626' : '#6B7280' }
                                   ]}>
-                                    {entry.type === 'given' ? t('youGave') : t('youReceived')}
+                                    Bal. रु {Math.abs(entry.balance).toLocaleString()}
                                   </Text>
-                                  
-                                  <Text style={[styles.modernTransactionTime, { color: theme.colors.textSecondary }]}>
-                                    {entry.time}
-                                  </Text>
-                                  
-                                  {entry.description && (
-                                    <Text style={[styles.modernTransactionDescription, { color: theme.colors.textSecondary }]}>
-                                      {entry.description}
-                                    </Text>
-                                  )}
                                 </View>
                               </View>
                               
-                              {/* Right Side - Amount, Balance and Edit Button */}
-                              <View style={styles.rightSection}>
-                                <View style={styles.amountSection}>
-                                  <Text style={[
-                                    styles.modernTransactionAmount,
-                                    { color: entry.type === 'given' ? '#EF4444' : '#10B981' }
-                                  ]}>
-                                    रु {entry.amount.toLocaleString()}
-                                  </Text>
-                                  
-                                  <View style={[
-                                    styles.modernBalanceChip,
-                                    { backgroundColor: entry.balance > 0 ? '#DCFCE7' : entry.balance < 0 ? '#FEE2E2' : '#F3F4F6' }
-                                  ]}>
-                                    <Text style={[
-                                      styles.modernBalanceText,
-                                      { color: entry.balance > 0 ? '#059669' : entry.balance < 0 ? '#DC2626' : '#6B7280' }
-                                    ]}>
-                                      Bal. रु {Math.abs(entry.balance).toLocaleString()}
-                                    </Text>
-                                  </View>
+                              {/* Modern Edit Button */}
+                              <TouchableOpacity
+                                style={styles.modernEditButton}
+                                onPress={() => {
+                                  console.log('Edit button pressed for entry:', entry.id);
+                                  handleEditTransaction(entry);
+                                }}
+                                activeOpacity={0.7}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              >
+                                <View style={styles.modernEditButtonContainer}>
+                                  <Edit3 
+                                    size={14} 
+                                    color="white" 
+                                    strokeWidth={2.5}
+                                  />
                                 </View>
-                                
-                                {/* Modern Edit Button */}
-                                <TouchableOpacity
-                                  style={styles.modernEditButton}
-                                  onPress={() => {
-                                    console.log('Edit button pressed for entry:', entry.id);
-                                    handleEditTransaction(entry);
-                                  }}
-                                  activeOpacity={0.7}
-                                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                >
-                                  <View style={styles.modernEditButtonContainer}>
-                                    <Edit3 
-                                      size={14} 
-                                      color="white" 
-                                      strokeWidth={2.5}
-                                    />
-                                  </View>
-                                </TouchableOpacity>
-                              </View>
+                              </TouchableOpacity>
                             </View>
                           </View>
-                        );
-                      })}
-                    </View>
+                        </View>
+                      );
+                    })}
                   </View>
-                ))}
-              </>
+                </View>
+              ))
             ) : (
+              // Show empty state when no fresh data or no transactions
               <View style={styles.emptyState}>
                 <View style={[styles.emptyStateCard, {
                   backgroundColor: theme.colors.card,
@@ -1152,8 +1212,7 @@ export default function CustomerDetailScreen() {
                 </View>
               </View>
             )}
-          </ScrollView>
-        </View>
+        </ScrollView>
 
         {/* Bottom Action Buttons */}
         <View style={[styles.actionButtonsContainer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
@@ -1276,19 +1335,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     gap: 8,
+    justifyContent: 'space-between',
   },
   customerNameText: {
     fontSize: 20,
     fontWeight: '600',
     color: 'white',
     letterSpacing: 0.3,
-    flex: 0,
+    flex: 1,
     flexShrink: 1,
+  },
+  androidResponsiveName: {
+    // Android-specific responsive styling
+    maxWidth: '75%', // Ensure space for action buttons
+    textAlign: 'left',
   },
   actionButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0, // Prevent buttons from shrinking
+    marginLeft: 'auto', // Push buttons to the right
   },
   modernActionButton: {
     width: 32,
@@ -1394,6 +1461,20 @@ const styles = StyleSheet.create({
     marginLeft: 28,
   },
 
+  // Fixed top section styles
+  fixedTopSection: {
+    backgroundColor: 'transparent',
+  },
+  
+  // Scrollable transaction list styles
+  scrollableTransactionList: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  transactionListContent: {
+    paddingBottom: 100, // Extra padding for bottom action buttons
+  },
+  
   contentArea: {
     flex: 1,
   },

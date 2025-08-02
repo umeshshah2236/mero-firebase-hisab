@@ -263,8 +263,8 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
   };
 
   // Get all transaction entries for the current user
-  const getAllTransactionEntries = async (): Promise<TransactionEntry[]> => {
-    console.log('getAllTransactionEntries called');
+  const getAllTransactionEntries = async (forceRefresh: boolean = false): Promise<TransactionEntry[]> => {
+    console.log('getAllTransactionEntries called, forceRefresh:', forceRefresh);
     console.log('firebaseUser in context:', firebaseUser?.uid);
     console.log('auth.currentUser:', auth.currentUser?.uid);
     
@@ -293,7 +293,22 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
         throw new Error('Active user has no UID or ID');
       }
 
-      console.log('Getting all transaction entries');
+      // 🚀 CHECK FOR PRELOADED DATA FIRST (from OTP verification)
+      if (!forceRefresh && (globalThis as any).__preloadedData) {
+        const preloadedData = (globalThis as any).__preloadedData;
+        if (preloadedData.userId === userId && preloadedData.transactions) {
+          console.log('✅ Using preloaded transactions data for instant display');
+          const transactions = preloadedData.transactions;
+          
+          // Clear preloaded data after use
+          delete (globalThis as any).__preloadedData.transactions;
+          
+          console.log('Preloaded transactions:', transactions.length, 'entries');
+          return transactions;
+        }
+      }
+
+      console.log('Getting all transaction entries from Firebase');
       console.log('Using active user ID:', userId);
       
       const allTransactions = await firestoreHelpers.getTransactionEntries(userId);

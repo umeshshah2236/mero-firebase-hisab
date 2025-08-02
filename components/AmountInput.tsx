@@ -74,10 +74,10 @@ export default function AmountInput({
     ? { color: 'white' }
     : { color: theme.colors.text };
 
-  // Updated placeholder text color for better visibility for older users
+  // Updated placeholder text color - more faded so it doesn't look like actual data
   const placeholderTextColor = isDark
-    ? 'rgba(255, 255, 255, 0.6)'
-    : 'rgba(120, 120, 120, 0.9)';
+    ? 'rgba(255, 255, 255, 0.3)'
+    : 'rgba(120, 120, 120, 0.3)';
 
   const labelColor = isDark ? 'white' : theme.colors.text;
 

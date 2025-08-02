@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Dimensions, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { ArrowLeft, Calculator } from 'lucide-react-native';
@@ -37,7 +38,7 @@ const getCompactSpacing = (small: number, medium: number, large: number) => {
   return large;
 };
 
-export default function CalculatorScreen() {
+export default React.memo(function CalculatorScreen() {
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
   const { isAuthenticated } = useAuth();
@@ -49,6 +50,20 @@ export default function CalculatorScreen() {
       router.replace('/(tabs)/(home)/dashboard');
     }
   }, [isAuthenticated]);
+
+  // Keep screen active for smooth transitions on Android
+  useFocusEffect(
+    React.useCallback(() => {
+      // This keeps the screen rendered and prevents white flash
+      console.log('Calculator screen focused - maintaining state');
+      return () => {
+        // Don't cleanup state on Android to prevent white flash
+        if (Platform.OS !== 'android') {
+          console.log('Calculator screen unfocused');
+        }
+      };
+    }, [])
+  );
   
   // Get current BS date using Nepal timezone logic
   const getCurrentBSDate = (): BSDate => {
@@ -192,11 +207,13 @@ export default function CalculatorScreen() {
 
   return (
     <KeyboardAvoidingView 
-      style={{ flex: 1 }} 
+      style={{ flex: 1, backgroundColor: theme.colors.background }} 
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.contentContainer}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} style={{ flex: 1 }}>
+        <ScrollView 
+          style={[styles.container, { backgroundColor: theme.colors.background }]} 
+          contentContainerStyle={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
         <LinearGradient
           colors={['#1e40af', '#3b82f6']}
           style={[styles.header, { 
@@ -228,7 +245,9 @@ export default function CalculatorScreen() {
               paddingLeft: backButtonSize + getCompactSpacing(8, 12, 16),
             }]}>
               <Text style={[styles.mainTitle, {
-                fontSize: getResponsiveSize(26, 30, 34),
+                fontSize: Platform.OS === 'android' ? 22 : 26,
+                fontWeight: '700',
+                letterSpacing: 0.3,
               }]}>
                 ग्रामीण ब्याज क्यालकुलेटर
               </Text>
@@ -248,7 +267,9 @@ export default function CalculatorScreen() {
           }]}>
             <Text style={[styles.sectionLabel, { 
               color: theme.colors.text,
-              fontSize: getResponsiveSize(18, 20, 22),
+              fontSize: Platform.OS === 'android' ? 18 : 20,
+              fontWeight: '600',
+              letterSpacing: 0.3,
             }]}>
               {t('principalAmount')}
             </Text>
@@ -268,7 +289,9 @@ export default function CalculatorScreen() {
           }]}>
             <Text style={[styles.sectionLabel, { 
               color: theme.colors.text,
-              fontSize: getResponsiveSize(18, 20, 22),
+              fontSize: Platform.OS === 'android' ? 18 : 20,
+              fontWeight: '600',
+              letterSpacing: 0.3,
             }]}>
               {t('monthlyInterestRate')}
             </Text>
@@ -284,15 +307,17 @@ export default function CalculatorScreen() {
           </View>
           
           <View style={[styles.inputWrapper, {
-            marginBottom: getCompactSpacing(6, 8, 10),
+            marginBottom: 1, // Reduced to 1px
           }]}>
             <Text style={[styles.sectionLabel, { 
               color: theme.colors.text,
-              fontSize: getResponsiveSize(18, 20, 22),
+              fontSize: Platform.OS === 'android' ? 18 : 20,
+              fontWeight: '600',
+              letterSpacing: 0.3,
             }]}>
               {t('startDate')}
             </Text>
-            <View style={styles.dateInputWrapper}>
+            <View style={[styles.dateInputWrapper, { marginBottom: 1 }]}>
               <DatePicker
                 label=""
                 value={startDate}
@@ -303,15 +328,17 @@ export default function CalculatorScreen() {
           </View>
           
           <View style={[styles.inputWrapper, {
-            marginBottom: getCompactSpacing(6, 8, 10),
+            marginBottom: 1, // Reduced to 1px
           }]}>
             <Text style={[styles.sectionLabel, { 
               color: theme.colors.text,
-              fontSize: getResponsiveSize(18, 20, 22),
+              fontSize: Platform.OS === 'android' ? 18 : 20,
+              fontWeight: '600',
+              letterSpacing: 0.3,
             }]}>
               {t('endDate')}
             </Text>
-            <View style={styles.dateInputWrapper}>
+            <View style={[styles.dateInputWrapper, { marginBottom: 1 }]}>
               <DatePicker
                 label=""
                 value={endDate}
@@ -336,7 +363,9 @@ export default function CalculatorScreen() {
                 style={styles.buttonGradient}
               >
                 <Text style={[styles.resetButtonText, {
-                  fontSize: getResponsiveSize(18, 20, 22),
+                  fontSize: Platform.OS === 'android' ? 16 : 20,
+                  fontWeight: '600',
+                  letterSpacing: 0.3,
                 }]}>
                   {t('reset')}
                 </Text>
@@ -354,7 +383,9 @@ export default function CalculatorScreen() {
                 style={styles.buttonGradient}
               >
                 <Text style={[styles.calculateButtonText, {
-                  fontSize: getResponsiveSize(18, 20, 22),
+                  fontSize: Platform.OS === 'android' ? 18 : 22,
+                  fontWeight: '700',
+                  letterSpacing: 0.3,
                 }]}>
                   {t('calculate')}
                 </Text>
@@ -366,7 +397,7 @@ export default function CalculatorScreen() {
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -410,10 +441,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mainTitle: {
-    fontWeight: '800',
     color: 'white',
     textAlign: 'center',
-    letterSpacing: 1.5,
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
@@ -441,11 +470,10 @@ const styles = StyleSheet.create({
   },
   dateInputWrapper: {
     marginTop: 1,
+    marginBottom: 1,
   },
   sectionLabel: {
     marginBottom: 4,
-    fontWeight: '800',
-    letterSpacing: 0.5,
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -469,12 +497,8 @@ const styles = StyleSheet.create({
   },
   resetButtonText: {
     color: 'white',
-    fontWeight: '700',
-    letterSpacing: 0.5,
   },
   calculateButtonText: {
     color: 'white',
-    fontWeight: '700',
-    letterSpacing: 0.5,
   },
 });

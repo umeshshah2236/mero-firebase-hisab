@@ -18,7 +18,15 @@ export interface Customer {
 
 export const [CustomersProvider, useCustomers] = createContextHook(() => {
   const [firebaseUser, setFirebaseUser] = useState<any>(null);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  // 🚀 Initialize with preloaded data if available for instant UI display
+  const [customers, setCustomers] = useState<Customer[]>(() => {
+    const preloadedData = (globalThis as any).__preloadedData;
+    if (preloadedData?.uiReady && preloadedData?.customers) {
+      console.log('🚀 CustomersContext: Initializing with preloaded data for instant display');
+      return preloadedData.customers;
+    }
+    return [];
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { isOnline, addPendingOperation } = useNetwork();
@@ -45,6 +53,29 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
       return;
     }
 
+    const userId = firebaseUser?.uid || firebaseUser?.id;
+
+    // 🚀 CHECK FOR PRELOADED DATA FIRST (from OTP verification)
+    if (!forceRefresh && (globalThis as any).__preloadedData) {
+      const preloadedData = (globalThis as any).__preloadedData;
+      if (preloadedData.userId === userId && preloadedData.customers) {
+        console.log('✅ Using preloaded customers data for instant display');
+        setCustomers(preloadedData.customers);
+        setLoading(false);
+        
+        // Save to offline storage for future use
+        try {
+          await offlineStorage.saveCustomers(userId, preloadedData.customers);
+        } catch (e) {
+          console.warn('Failed to save preloaded customers to offline storage:', e);
+        }
+        
+        // Clear preloaded data after use
+        delete (globalThis as any).__preloadedData.customers;
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
 
@@ -54,7 +85,6 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
       // If offline, try to load from local storage first
       if (!isOnline) {
         console.log('📱 Offline mode: Loading customers from local storage');
-        const userId = firebaseUser?.uid || firebaseUser?.id;
         const offlineCustomers = await offlineStorage.loadCustomers(userId);
         if (offlineCustomers) {
           setCustomers(offlineCustomers);

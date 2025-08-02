@@ -45,9 +45,21 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
-  const [transactionEntries, setTransactionEntries] = useState<TransactionEntry[]>([]);
+  // 🚀 Initialize with preloaded data if available for instant UI display
+  const [transactionEntries, setTransactionEntries] = useState<TransactionEntry[]>(() => {
+    const preloadedData = (globalThis as any).__preloadedData;
+    if (preloadedData?.uiReady && preloadedData?.transactions) {
+      console.log('🚀 Dashboard: Initializing with preloaded transactions for instant display');
+      return preloadedData.transactions;
+    }
+    return [];
+  });
   const [forceUpdate, setForceUpdate] = useState(0);
-  const [hasFreshTransactionData, setHasFreshTransactionData] = useState(false);
+  // 🚀 Start with fresh data flag set to true if we have preloaded data
+  const [hasFreshTransactionData, setHasFreshTransactionData] = useState(() => {
+    const preloadedData = (globalThis as any).__preloadedData;
+    return !!(preloadedData?.uiReady && preloadedData?.transactions);
+  });
 
   // Redirect to home if user is not authenticated - optimized for smooth transitions
   useEffect(() => {
@@ -81,22 +93,33 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       console.log('Dashboard: Screen focused');
       setIsScreenFocused(true);
       
-      // Always refresh transaction data when screen comes into focus
+      // Check if we already have preloaded data and this is initial focus
+      const preloadedData = (globalThis as any).__preloadedData;
+      if (preloadedData?.uiReady && transactionEntries.length > 0 && hasFreshTransactionData) {
+        console.log('Dashboard: Using preloaded data, skipping refresh on initial focus');
+        // Clear preloaded data flag after first use
+        if (preloadedData.uiReady) {
+          delete (globalThis as any).__preloadedData;
+        }
+        return;
+      }
+      
+      // Refresh transaction data when screen comes into focus (only if not using preloaded data)
       if (isAuthenticated && user) {
         console.log('Dashboard: Refreshing transaction data on focus');
         // Force refresh transaction entries to ensure latest data
-                  getAllTransactionEntries().then((entries) => {
-            console.log('Dashboard: Refreshed transaction entries on focus:', entries.length);
-            setTransactionEntries(entries || []);
-            setHasFreshTransactionData(true);
-            
-            // Force a re-render by updating state
-            setTimeout(() => {
-              console.log('Dashboard: Forcing re-render after transaction refresh');
-              setTransactionEntries([...entries || []]);
-              setForceUpdate(prev => prev + 1);
-            }, 100);
-          }).catch((error) => {
+        getAllTransactionEntries().then((entries) => {
+          console.log('Dashboard: Refreshed transaction entries on focus:', entries.length);
+          setTransactionEntries(entries || []);
+          setHasFreshTransactionData(true);
+          
+          // Force a re-render by updating state
+          setTimeout(() => {
+            console.log('Dashboard: Forcing re-render after transaction refresh');
+            setTransactionEntries([...entries || []]);
+            setForceUpdate(prev => prev + 1);
+          }, 100);
+        }).catch((error) => {
           console.error('Dashboard: Error refreshing transaction entries on focus:', error);
         });
       }
@@ -118,20 +141,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     }
   }, [isAuthenticated, user, hasRedirected, hasInitiallyLoaded]);
 
-  // Force refresh transaction data when component mounts or user changes
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      console.log('Dashboard: Force refreshing transaction data');
-      setHasFreshTransactionData(false); // Reset flag before refreshing
-      getAllTransactionEntries().then((entries) => {
-        console.log('Dashboard: Force refreshed transaction entries:', entries.length);
-        setTransactionEntries(entries || []);
-        setHasFreshTransactionData(true);
-      }).catch((error) => {
-        console.error('Dashboard: Error force refreshing transaction entries:', error);
-      });
-    }
-  }, [isAuthenticated, user]);
+
 
   // Refresh transaction data when returning to screen to ensure latest data
   useEffect(() => {
@@ -161,11 +171,6 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       });
     }
   }, [isScreenFocused, isAuthenticated, user]);
-
-  // Don't render anything if user is not authenticated or still loading auth
-  if (authLoading || !isAuthenticated) {
-    return null;
-  }
 
   // Handle network connectivity issues
   const isNetworkError = (errorMessage: string) => {
@@ -366,6 +371,11 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     console.log('Force update count:', forceUpdate);
   }, [transactionEntries, forceUpdate]);
   
+  // Don't render anything if user is not authenticated or still loading auth
+  if (authLoading || !isAuthenticated) {
+    return null;
+  }
+  
   const filteredCustomers = filterPersons(allCustomers, searchQuery);
 
   const handlePersonPress = (person: PersonSummary) => {
@@ -379,7 +389,8 @@ const DashboardScreen = React.memo(function DashboardScreen() {
         pathname: '/(tabs)/(home)/customer-detail',
         params: {
           customerName: person.name,
-          customerPhone: person.name // Using name as phone for now
+          customerPhone: person.name, // Using name as phone for now
+          transactions: JSON.stringify(person.transactions),
         }
       });
     }, 100);
@@ -564,7 +575,6 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   };
 
 
-
   return (
     <View style={styles.container}>
       <Stack.Screen 
@@ -669,21 +679,8 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       </View>
       
       <SafeAreaView style={[styles.content, { backgroundColor: theme.colors.background }]}>
-        <ScrollView 
-          style={styles.scrollView} 
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => handleRefresh(true)}
-              tintColor={theme.colors.primary}
-              colors={[theme.colors.primary]}
-            />
-          }
-        >
-        {/* Content moved to ScrollView */}
-        <View style={styles.contentWrapper}>
+        {/* FIXED SECTION - Summary Cards, Search, and Add Button */}
+        <View style={styles.fixedTopSection}>
         {/* Premium Summary Cards */}
         <View style={styles.premiumSummaryContainer}>
           <View style={styles.premiumSummaryGrid}>
@@ -727,8 +724,6 @@ const DashboardScreen = React.memo(function DashboardScreen() {
 
 
 
-        {/* Tab Content */}
-        <View style={styles.tabContent}>
           {/* Error Display */}
           {(transactionError || customersError) && (
             <View style={[styles.errorContainer, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
@@ -805,7 +800,22 @@ const DashboardScreen = React.memo(function DashboardScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
 
+        {/* SCROLLABLE SECTION - Customer List Only */}
+        <ScrollView 
+          style={styles.scrollableCustomerList} 
+          contentContainerStyle={styles.customerListContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => handleRefresh(true)}
+              tintColor={theme.colors.primary}
+              colors={[theme.colors.primary]}
+            />
+          }
+        >
           {/* Premium Customers List - Simplified without loading indicators */}
           <View style={styles.premiumListContainer}>
             <View style={styles.premiumContentContainer}>
@@ -863,8 +873,6 @@ const DashboardScreen = React.memo(function DashboardScreen() {
               )}
             </View>
           </View>
-        </View>
-        </View>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -1067,6 +1075,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     marginHorizontal: 8,
   },
+  // Fixed top section styles
+  fixedTopSection: {
+    backgroundColor: 'transparent',
+  },
+  
+  // Scrollable customer list styles
+  scrollableCustomerList: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  customerListContent: {
+    paddingBottom: 20,
+  },
+  
   scrollView: {
     flex: 1,
   },

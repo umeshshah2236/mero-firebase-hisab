@@ -45,10 +45,15 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
           console.log('Found existing profile:', profile.name);
           profileName = profile.name;
           
-          // Check if the name is a temporary name or phone number - show name input for all
-          if (profileName.startsWith('User ') || profileName.includes('+977') || profileName === 'User') {
-            console.log('User has temporary name or phone number, showing name input modal');
+          // Only show name input for users with temporary names (but not for existing users with real names)
+          const hasTemporaryName = profileName.startsWith('User ') || profileName.includes('+977') || profileName === 'User';
+          const hasRealName = profile.name && profile.name.length > 4 && !hasTemporaryName;
+          
+          if (hasTemporaryName && !hasRealName) {
+            console.log('User has temporary name, showing name input modal');
             setShowNameInput(true);
+          } else {
+            console.log('User has existing real name, skipping name input modal');
           }
         } else {
           console.log('No profile found, creating new one');
@@ -60,17 +65,31 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
             });
             console.log('Created new profile:', profileName);
             
-            // Show name input modal for new users
+            // Show name input modal for new users only
             console.log('New user, showing name input modal');
             setShowNameInput(true);
           } catch (createError) {
             console.log('Profile creation failed:', createError);
+            // Only show name input if this is a genuine new user creation failure
+            setShowNameInput(true);
           }
         }
       } catch (profileError) {
-        console.log('Profile loading failed, using fallback');
-        // Show name input modal if profile loading fails
-        setShowNameInput(true);
+        console.log('Profile loading failed:', profileError);
+        
+        // Only show name input modal if we're sure this is a connection issue, not an existing user
+        // Test if the error is network-related
+        const isNetworkError = profileError.toString().includes('network') || 
+                              profileError.toString().includes('offline') ||
+                              profileError.toString().includes('connection');
+        
+        if (isNetworkError) {
+          console.log('Network error during profile loading, skipping name input modal for existing user');
+          // Don't show name input for network errors - user likely exists
+        } else {
+          console.log('Non-network error during profile loading, showing name input modal');
+          setShowNameInput(true);
+        }
       }
       
       console.log('Setting user with name:', profileName);
@@ -401,6 +420,37 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
 
       // Set the Firebase user in state
       setFirebaseUser(mockUser);
+      
+      // 🚀 PRELOAD DATA AND PREPARE UI DURING VERIFICATION
+      console.log('🚀 Starting data preload and UI preparation during OTP verification...');
+      try {
+        // Preload customers and transactions in parallel for faster loading
+        const preloadPromises = [
+          firestoreHelpers.getCustomers(userId),
+          firestoreHelpers.getAllTransactionEntries(userId)
+        ];
+        
+        const [preloadedCustomers, preloadedTransactions] = await Promise.all(preloadPromises);
+        console.log('✅ Data preloaded successfully:', {
+          customers: preloadedCustomers?.length || 0,
+          transactions: preloadedTransactions?.length || 0
+        });
+        
+        // Store preloaded data with ready flag for instant UI initialization
+        (globalThis as any).__preloadedData = {
+          customers: preloadedCustomers || [],
+          transactions: preloadedTransactions || [],
+          userId: userId,
+          timestamp: Date.now(),
+          uiReady: true // Flag to indicate UI can be rendered instantly
+        };
+        
+        console.log('✅ UI preparation complete - ready for instant display');
+        
+      } catch (preloadError) {
+        console.warn('⚠️ Data preload failed, will load normally:', preloadError);
+        // Continue with normal flow if preload fails
+      }
       
       // Handle the user profile
       await handleUserProfile(mockUser);

@@ -133,28 +133,8 @@ export default function EditGiveEntryScreen() {
       
       console.log('Give entry updated successfully');
       
-      // Use router.push with immediate navigation for both platforms
-      const navigateBack = () => {
-        router.push({
-          pathname: '/(tabs)/(home)/customer-detail',
-          params: {
-            customerName,
-            customerPhone
-          }
-        });
-      };
-      
-      // Navigate back immediately without alert on web, with alert on mobile
-      if (Platform.OS === 'web') {
-        navigateBack();
-      } else {
-        Alert.alert(t('success'), t('entryUpdatedSuccessfully'), [
-          {
-            text: t('ok'),
-            onPress: navigateBack
-          }
-        ]);
-      }
+      // Use router.back() for consistent behavior
+      router.back();
       
     } catch (error) {
       console.error('Error updating give entry:', error);
@@ -187,32 +167,8 @@ export default function EditGiveEntryScreen() {
         await deleteTransactionEntry(editTransactionId);
         console.log('Transaction deleted successfully');
         
-        // Navigate back immediately for both platforms
-        const navigateBack = () => {
-          console.log('Navigating back to customer detail page');
-          router.push({
-            pathname: '/(tabs)/(home)/customer-detail',
-            params: {
-              customerName,
-              customerPhone
-            }
-          });
-        };
-        
-        // For web, navigate immediately. For mobile, show success alert first
-        if (Platform.OS === 'web') {
-          // Add a small delay to ensure the deletion is processed
-          setTimeout(() => {
-            navigateBack();
-          }, 100);
-        } else {
-          Alert.alert(t('success'), t('entryDeletedSuccessfully'), [
-            {
-              text: t('ok'),
-              onPress: navigateBack
-            }
-          ]);
-        }
+        // Navigate back immediately
+        router.back();
       } catch (error) {
         console.error('Error deleting entry:', error);
         const errorMessage = error instanceof Error ? error.message : t('failedToDeleteEntry');

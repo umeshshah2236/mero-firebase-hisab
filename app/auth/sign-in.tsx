@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNetwork } from '@/contexts/NetworkContext';
 
 const { width } = Dimensions.get('window');
 
@@ -27,6 +28,7 @@ export default function SignInScreen() {
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
   const { checkUserExists, sendOtp, verifyOtp } = useAuth();
+  const { isOnline } = useNetwork();
   const insets = useSafeAreaInsets();
   const phoneInputRef = useRef<TextInput>(null);
   const otpInputRef = useRef<TextInput>(null);
@@ -90,6 +92,13 @@ export default function SignInScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
 
+    // 🌐 Check network connectivity first
+    if (!isOnline) {
+      setErrors({ phone: 'No internet connection. Please check your network and try again.' });
+      Alert.alert('No Internet Connection', 'Please check your network connection and try again.');
+      return;
+    }
+
     if (isResend) {
       setIsResending(true);
     } else {
@@ -147,6 +156,13 @@ export default function SignInScreen() {
   const handleVerifyOtp = async () => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+
+    // 🌐 Check network connectivity first
+    if (!isOnline) {
+      setErrors({ otp: 'No internet connection. Please check your network and try again.' });
+      Alert.alert('No Internet Connection', 'Please check your network connection and try again.');
+      return;
     }
 
     setIsLoading(true);

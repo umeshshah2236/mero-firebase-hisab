@@ -352,7 +352,9 @@ export default function KarobarScreen() {
     }]}>
       <Text style={[styles.sectionLabel, { 
         color: theme.colors.text,
-        fontSize: getResponsiveSize(15, 16, 17),
+        fontSize: Platform.OS === 'android' ? 18 : 20,
+        fontWeight: '600',
+        letterSpacing: 0.3,
       }]}>
         {t('partialRepayment')}
       </Text>
@@ -361,7 +363,9 @@ export default function KarobarScreen() {
       }]}>
         <Text style={[styles.toggleLabel, { 
           color: theme.colors.text,
-          fontSize: getResponsiveSize(14, 15, 16),
+          fontSize: Platform.OS === 'android' ? 16 : 18,
+          fontWeight: '500',
+          letterSpacing: 0.3,
         }]}>
           {t('hasRepayment')}
         </Text>
@@ -413,7 +417,9 @@ export default function KarobarScreen() {
               paddingLeft: backButtonSize + getResponsiveSize(8, 12, 16),
             }]}>
               <Text style={[styles.mainTitle, {
-                fontSize: getResponsiveSize(24, 28, 32),
+                fontSize: Platform.OS === 'android' ? 22 : 26,
+                fontWeight: '700',
+                letterSpacing: 0.3,
               }]}>
                 रिपेमेन्ट ब्याज क्यालकुलेटर
               </Text>
@@ -433,7 +439,9 @@ export default function KarobarScreen() {
           }]}>
             <Text style={[styles.sectionLabel, { 
               color: theme.colors.text,
-              fontSize: getResponsiveSize(16, 18, 20),
+              fontSize: Platform.OS === 'android' ? 18 : 20,
+              fontWeight: '600',
+              letterSpacing: 0.3,
             }]}>
               {t('loanAmount')}
             </Text>
@@ -453,7 +461,9 @@ export default function KarobarScreen() {
           }]}>
             <Text style={[styles.sectionLabel, { 
               color: theme.colors.text,
-              fontSize: getResponsiveSize(16, 18, 20),
+              fontSize: Platform.OS === 'android' ? 18 : 20,
+              fontWeight: '600',
+              letterSpacing: 0.3,
             }]}>
               {t('loanDate')}
             </Text>
@@ -472,7 +482,9 @@ export default function KarobarScreen() {
           }]}>
             <Text style={[styles.sectionLabel, { 
               color: theme.colors.text,
-              fontSize: getResponsiveSize(16, 18, 20),
+              fontSize: Platform.OS === 'android' ? 18 : 20,
+              fontWeight: '600',
+              letterSpacing: 0.3,
             }]}>
               {t('monthlyInterestRate')}
             </Text>
@@ -492,7 +504,9 @@ export default function KarobarScreen() {
           }]}>
             <Text style={[styles.sectionLabel, { 
               color: theme.colors.text,
-              fontSize: getResponsiveSize(16, 18, 20),
+              fontSize: Platform.OS === 'android' ? 18 : 20,
+              fontWeight: '600',
+              letterSpacing: 0.3,
             }]}>
               {t('endDate')} (BS)
             </Text>
@@ -577,7 +591,9 @@ export default function KarobarScreen() {
                   }]}>
                     <Text style={[styles.sectionLabel, { 
                       color: theme.colors.text,
-                      fontSize: getResponsiveSize(13, 14, 15),
+                      fontSize: Platform.OS === 'android' ? 16 : 18,
+                      fontWeight: '600',
+                      letterSpacing: 0.3,
                     }]}>
                       {t('repaymentAmount')}
                     </Text>
@@ -595,7 +611,9 @@ export default function KarobarScreen() {
                   <View style={styles.inputWrapper}>
                     <Text style={[styles.sectionLabel, { 
                       color: theme.colors.text,
-                      fontSize: getResponsiveSize(13, 14, 15),
+                      fontSize: Platform.OS === 'android' ? 16 : 18,
+                      fontWeight: '600',
+                      letterSpacing: 0.3,
                     }]}>
                       {t('repaymentDate')}
                     </Text>
@@ -628,7 +646,9 @@ export default function KarobarScreen() {
                 style={styles.buttonGradient}
               >
                 <Text style={[styles.resetButtonText, {
-                  fontSize: getResponsiveSize(16, 18, 20),
+                  fontSize: Platform.OS === 'android' ? 16 : 20,
+                  fontWeight: '600',
+                  letterSpacing: 0.3,
                 }]}>
                   {t('reset')}
                 </Text>
@@ -646,7 +666,9 @@ export default function KarobarScreen() {
                 style={styles.buttonGradient}
               >
                 <Text style={[styles.calculateButtonText, {
-                  fontSize: getResponsiveSize(16, 18, 20),
+                  fontSize: Platform.OS === 'android' ? 18 : 22,
+                  fontWeight: '700',
+                  letterSpacing: 0.3,
                 }]}>
                   {t('calculate')}
                 </Text>

@@ -153,21 +153,7 @@ export default function AddGiveEntryScreen() {
         );
         
         console.log('Give entry updated successfully');
-        Alert.alert(t('success'), t('entryUpdatedSuccessfully'), [
-          {
-            text: t('ok'),
-            onPress: () => {
-              // Navigate back to customer detail page
-              router.replace({
-                pathname: '/(tabs)/(home)/customer-detail',
-                params: {
-                  customerName,
-                  customerPhone
-                }
-              });
-            }
-          }
-        ]);
+        router.back();
       } else {
         // Create new transaction entry using selected date
         const bsDateString = `${selectedDate.year}-${selectedDate.month.toString().padStart(2, '0')}-${selectedDate.day.toString().padStart(2, '0')}`;
@@ -196,21 +182,7 @@ export default function AddGiveEntryScreen() {
         }
         
         console.log('Give entry saved successfully');
-        Alert.alert(t('success'), t('entrySavedSuccessfully'), [
-          {
-            text: t('ok'),
-            onPress: () => {
-              // Navigate back to customer detail page
-              router.replace({
-                pathname: '/(tabs)/(home)/customer-detail',
-                params: {
-                  customerName,
-                  customerPhone
-                }
-              });
-            }
-          }
-        ]);
+        router.back();
       }
       
     } catch (error) {

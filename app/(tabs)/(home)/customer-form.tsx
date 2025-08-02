@@ -144,20 +144,11 @@ export default function CustomerFormScreen() {
         console.log('=== CUSTOMER UPDATE SUCCESS ===');
         console.log('Result:', result);
         
-        // Show success message and navigate back to home page
-        Alert.alert(
-          'Success',
-          'Customer updated successfully!',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                // Navigate back to home page
-                router.replace('/(tabs)/(home)/dashboard');
-              }
-            }
-          ]
-        );
+        // Navigate back to the statement page
+        router.replace({
+          pathname: '/(tabs)/(home)/customer-detail',
+          params: { customerName: customerName.trim(), customerPhone: formattedPhone || '' }
+        });
       } else {
         console.log('=== ADDING NEW CUSTOMER ===');
         console.log('Customer name:', customerName.trim());

@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,7 +31,7 @@ const getCompactSpacing = (small: number, medium: number, large: number) => {
   return large;
 };
 
-export default function ResultsScreen() {
+export default React.memo(function ResultsScreen() {
   const { t, language } = useLanguage();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -74,15 +75,33 @@ export default function ResultsScreen() {
     return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
   };
 
+  // Keep screen active for smooth transitions on Android
+  useFocusEffect(
+    React.useCallback(() => {
+      // This keeps the screen rendered and prevents white flash during navigation
+      console.log('Results screen focused - maintaining state');
+      return () => {
+        // Don't cleanup state on Android to prevent white flash
+        if (Platform.OS !== 'android') {
+          console.log('Results screen unfocused');
+        }
+      };
+    }, [])
+  );
+
   const handleGoBack = () => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Add a small delay for smoother transition
-    setTimeout(() => {
-      router.back();
-    }, 100);
+    // Android-specific fix: Use replace to avoid white flash
+    if (Platform.OS === 'android') {
+      router.replace('/(tabs)/(home)/calculator');
+    } else {
+      setTimeout(() => {
+        router.back();
+      }, 100);
+    }
   };
 
   const getLocalizedMonthName = (monthIndex: number) => {
@@ -194,7 +213,7 @@ export default function ResultsScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background || '#F8FAFC' }]}>
       {/* Compact Header with Back Button */}
       <View style={[styles.simpleHeader, { paddingTop: insets.top + getCompactSpacing(6, 8, 10) }]}>
         <TouchableOpacity style={styles.backIconButton} onPress={handleGoBack}>
@@ -214,12 +233,15 @@ export default function ResultsScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.scrollContainer} contentContainerStyle={[styles.contentContainer, {
-        paddingBottom: getCompactSpacing(20, 24, 28),
-      }]}>
+      <ScrollView 
+        style={[styles.scrollContainer, { backgroundColor: theme.colors.background || '#F8FAFC' }]} 
+        contentContainerStyle={[styles.contentContainer, {
+          paddingBottom: getCompactSpacing(20, 24, 28),
+        }]}>
         <View style={[styles.resultsContainer, {
           paddingHorizontal: getCompactSpacing(12, 16, 20),
           paddingTop: getCompactSpacing(8, 12, 16),
+          backgroundColor: theme.colors.background || '#F8FAFC',
         }]}>
           {/* Total Interest - Highlighted - MOVED TO TOP */}
           <View style={[styles.highlightCard, {
@@ -399,7 +421,7 @@ export default function ResultsScreen() {
       </ScrollView>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
