@@ -131,7 +131,7 @@ export default function SignUpScreen() {
       }
 
       if (userCheck.exists) {
-        setErrors({ phone: "This account already exists. Please sign in instead." });
+        // User already exists, redirect to sign-in with a helpful message
         Alert.alert(
           "Account Already Exists", 
           "This phone number is already registered. Please sign in to your account.",

@@ -54,7 +54,8 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
       // If offline, try to load from local storage first
       if (!isOnline) {
         console.log('📱 Offline mode: Loading customers from local storage');
-        const offlineCustomers = await offlineStorage.loadCustomers(firebaseUser.uid);
+        const userId = firebaseUser?.uid || firebaseUser?.id;
+        const offlineCustomers = await offlineStorage.loadCustomers(userId);
         if (offlineCustomers) {
           setCustomers(offlineCustomers);
           setLoading(false);
@@ -85,14 +86,22 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
       const contextUser = firebaseUser;
       const activeUser = currentUser || contextUser;
       
+      // Get the user ID - handle both real Firebase Auth (uid) and mock auth (id)
+      const userId = activeUser.uid || activeUser.id;
+      
+      if (!userId) {
+        console.error('Active user has no UID or ID in fetchCustomers');
+        throw new Error('Active user has no UID or ID');
+      }
+      
       // Get customers from Firestore
-      const data = await firestoreHelpers.getCustomers(activeUser.uid);
+      const data = await firestoreHelpers.getCustomers(userId);
 
       console.log('CustomersContext: Raw data from Firestore:', data?.length || 0, 'customers');
       console.log('CustomersContext: Sample customer data:', data?.slice(0, 2));
       
       // Ensure phone numbers are properly formatted with +977 prefix
-      const formattedCustomers = (data || []).map(customer => ({
+      const formattedCustomers = (data || []).map((customer: any) => ({
         ...customer,
         phone: customer.phone && !customer.phone.startsWith('+') 
           ? '+977' + customer.phone 
@@ -100,7 +109,7 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
       }));
       
       console.log('CustomersContext: Setting customers:', formattedCustomers.length);
-      console.log('CustomersContext: Formatted customers:', formattedCustomers.map(c => ({ id: c.id, name: c.name })));
+      console.log('CustomersContext: Formatted customers:', formattedCustomers.map((c: any) => ({ id: c.id, name: c.name })));
       
       // Force state update by creating a new array reference
       setCustomers([...formattedCustomers]);
@@ -108,7 +117,8 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
       // Save to offline storage for offline access
       if (isOnline) {
         try {
-          await offlineStorage.saveCustomers(formattedCustomers, firebaseUser.uid);
+          const userId = firebaseUser?.uid || firebaseUser?.id;
+          await offlineStorage.saveCustomers(formattedCustomers, userId);
           console.log('💾 Saved customers to offline storage');
         } catch (error) {
           console.error('Error saving customers to offline storage:', error);
@@ -161,10 +171,18 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
       console.log('Firebase user ID:', firebaseUser?.uid);
       console.log('Network status:', isOnline ? 'Online' : 'Offline');
       
+      // Get the user ID - handle both real Firebase Auth (uid) and mock auth (id)
+      const userId = firebaseUser?.uid || firebaseUser?.id;
+      
+      if (!userId) {
+        console.error('Firebase user has no UID or ID in addCustomer');
+        throw new Error('Firebase user has no UID or ID');
+      }
+      
       // Ensure user_id is included in the customer data
       const customerDataWithUserId = {
         ...customerData,
-        user_id: firebaseUser?.uid
+        user_id: userId
       };
       
       console.log('Customer data with user_id:', customerDataWithUserId);
@@ -317,15 +335,23 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
     }
 
     try {
+      // Get the user ID - handle both real Firebase Auth (uid) and mock auth (id)
+      const userId = firebaseUser?.uid || firebaseUser?.id;
+      
+      if (!userId) {
+        console.error('Firebase user has no UID or ID in searchCustomers');
+        return [];
+      }
+      
       // For now, we'll do client-side search
       // In a real implementation, you might want to use Firestore's full-text search
-      const allCustomers = await firestoreHelpers.getCustomers(firebaseUser.uid);
+      const allCustomers = await firestoreHelpers.getCustomers(userId);
       const searchLower = searchTerm.toLowerCase();
       
-      return allCustomers.filter(customer => 
+      return allCustomers.filter((customer: any) =>
         customer.name.toLowerCase().includes(searchLower) ||
         (customer.phone && customer.phone.toLowerCase().includes(searchLower))
-      );
+      ) as Customer[];
     } catch (error) {
       console.error('Error in searchCustomers:', error);
       return [];

@@ -10,10 +10,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLoans, LoanWithRepayments } from '@/contexts/LoansContext';
+import { useTransactionEntries, TransactionEntry } from '@/contexts/TransactionEntriesContext';
 import { useCustomers } from '@/contexts/CustomersContext';
 
-import { capitalizeFirstLetters } from '@/utils/string-utils';
+import { capitalizeFirstLetters, extractDisplayName } from '@/utils/string-utils';
 
 
 const { width } = Dimensions.get('window');
@@ -27,7 +27,7 @@ interface PersonSummary {
   transactionCount: number;
   lastTransactionDate: string;
   status: 'active' | 'settled';
-  transactions: LoanWithRepayments[];
+  transactions: TransactionEntry[];
 }
 
 
@@ -37,7 +37,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   const { theme, isDark } = useTheme();
   const { user, firebaseUser, isAuthenticated, isLoading: authLoading, refreshSession } = useAuth();
   const insets = useSafeAreaInsets();
-  const { loans, isLoading, error, refreshLoans, setFirebaseUser } = useLoans();
+  const { loading: transactionLoading, error: transactionError, setFirebaseUser, getAllTransactionEntries } = useTransactionEntries();
   const { customers, loading: customersLoading, error: customersError, fetchCustomers, setFirebaseUser: setCustomersFirebaseUser } = useCustomers();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -45,6 +45,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
+  const [transactionEntries, setTransactionEntries] = useState<TransactionEntry[]>([]);
 
   // Redirect to home if user is not authenticated - optimized for smooth transitions
   useEffect(() => {
@@ -111,7 +112,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     
     try {
       // Check if we need to refresh the session first
-      if (error && error.includes('session has expired')) {
+      if (transactionError && transactionError.includes('session has expired')) {
         const sessionRefreshResult = await refreshSession();
         if (!sessionRefreshResult.success) {
           return;
@@ -119,10 +120,13 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       }
       
       // Always refresh data silently in background
-      await Promise.all([
-        refreshLoans(true),
-        fetchCustomers(true)
+      const [customersResult, transactionsResult] = await Promise.all([
+        fetchCustomers(true),
+        getAllTransactionEntries()
       ]);
+      
+      // Update transaction entries state
+      setTransactionEntries(transactionsResult || []);
     } catch (error) {
       // Handle errors silently for background refreshes
     } finally {
@@ -134,13 +138,12 @@ const DashboardScreen = React.memo(function DashboardScreen() {
 
 
 
-  // Create customer summaries combining database customers with loan data
+  // Create customer summaries combining database customers with transaction data
   const getCustomerSummaries = (): PersonSummary[] => {
     const customerMap = new Map<string, PersonSummary>();
     
     // First, add all customers from database
     customers.forEach((customer) => {
-      
       customerMap.set(customer.name, {
         name: customer.name,
         totalAmount: 0,
@@ -152,40 +155,32 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       });
     });
     
-    // Then, process all loan transactions for balance calculation
-    loans.forEach(loan => {
-      const existing = customerMap.get(loan.person_name);
-      
-      // Calculate the balance impact based on transaction type
-      // 'given' = YOU GAVE money to customer (increases what they owe you)
-      // 'received' = YOU GOT money from customer (decreases what they owe you)
-      const balanceImpact = loan.transaction_type === 'given' 
-        ? loan.loan_amount  // YOU GAVE: customer owes you more
-        : -loan.loan_amount; // YOU GOT: customer owes you less
-      
+    // Then, process all transaction entries for balance calculation
+    transactionEntries.forEach((transaction: TransactionEntry) => {
+      const existing = customerMap.get(transaction.customer_name);
+      const balanceImpact = transaction.transaction_type === 'given'
+        ? transaction.amount
+        : -transaction.amount;
       if (existing) {
-        existing.totalAmount += Math.abs(loan.loan_amount);
+        existing.totalAmount += Math.abs(transaction.amount);
         existing.netBalance += balanceImpact;
         existing.transactionCount += 1;
-        existing.transactions.push(loan);
-        
-        // Update lastTransactionDate with the most recent transaction or update time
-        const loanUpdatedAt = loan.updated_at || loan.loan_date;
-        if (new Date(loanUpdatedAt) > new Date(existing.lastTransactionDate)) {
-          existing.lastTransactionDate = loanUpdatedAt;
+        existing.transactions.push(transaction);
+        const transactionUpdatedAt = transaction.updated_at || transaction.transaction_date;
+        if (new Date(transactionUpdatedAt) > new Date(existing.lastTransactionDate)) {
+          existing.lastTransactionDate = transactionUpdatedAt;
         }
-        
         existing.status = existing.netBalance !== 0 ? 'active' : 'settled';
       } else {
-        // Customer not in database but has loans - add them
-        customerMap.set(loan.person_name, {
-          name: loan.person_name,
-          totalAmount: Math.abs(loan.loan_amount),
+        // Customer not in database but has transactions - add them
+        customerMap.set(transaction.customer_name, {
+          name: transaction.customer_name,
+          totalAmount: Math.abs(transaction.amount),
           netBalance: balanceImpact,
           transactionCount: 1,
-          lastTransactionDate: loan.updated_at || loan.loan_date,
+          lastTransactionDate: transaction.updated_at || transaction.transaction_date,
           status: balanceImpact !== 0 ? 'active' : 'settled',
-          transactions: [loan]
+          transactions: [transaction]
         });
       }
     });
@@ -264,46 +259,6 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       toGive += Math.abs(customer.netBalance);
     }
   });
-
-  // Extract first name from user's full name or username
-  const getFirstName = (fullName: string): string => {
-    if (!fullName) return 'User';
-    
-    const name = fullName.trim();
-    
-    // If it contains spaces, take the first part (proper name)
-    if (name.includes(' ')) {
-      const firstName = name.split(' ')[0];
-      return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
-    }
-    
-    // Handle usernames like "shahumesh2018" - extract alphabetic part before numbers
-    const alphabeticPart = name.match(/^[a-zA-Z]+/);
-    if (alphabeticPart) {
-      const extractedName = alphabeticPart[0];
-      // Capitalize first letter and make rest lowercase
-      return extractedName.charAt(0).toUpperCase() + extractedName.slice(1).toLowerCase();
-    }
-    
-    // Handle camelCase names like "johnDoe" - take first camelCase part
-    const camelCaseParts = name.match(/^[a-z]+|[A-Z][a-z]*/g);
-    if (camelCaseParts && camelCaseParts.length > 0) {
-      const firstPart = camelCaseParts[0];
-      return firstPart.charAt(0).toUpperCase() + firstPart.slice(1).toLowerCase();
-    }
-    
-    // Final fallback: return first word before any special character, capitalized
-    const firstWord = name.split(/[^a-zA-Z]/)[0];
-    if (firstWord && firstWord.length > 0) {
-      return firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
-    }
-    
-    return 'User';
-  };
-
-
-
-
 
   // Get initials for avatar
   const getInitials = (name: string): string => {
@@ -508,7 +463,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                 style={styles.modernAvatarGradient}
               >
                 <Text style={styles.modernAvatarText}>
-                  {getInitials(getFirstName(firebaseUser?.displayName || user?.name || user?.phone || ''))}
+                  {getInitials(extractDisplayName(firebaseUser?.displayName || user?.name || user?.phone || ''))}
                 </Text>
               </LinearGradient>
               <View style={styles.financeIconBadge}>
@@ -519,7 +474,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
             <View style={styles.modernProfileInfo}>
               <Text style={styles.modernGreetingText}>{t('welcomeBack')}</Text>
               <Text style={styles.modernProfileName}>
-                {getFirstName(firebaseUser?.displayName || user?.name || user?.phone || '')}
+                {extractDisplayName(firebaseUser?.displayName || user?.name || user?.phone || '')}
               </Text>
             </View>
           </View>
@@ -634,12 +589,12 @@ const DashboardScreen = React.memo(function DashboardScreen() {
         {/* Tab Content */}
         <View style={styles.tabContent}>
           {/* Error Display */}
-          {(error || customersError) && (
+          {(transactionError || customersError) && (
             <View style={[styles.errorContainer, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
               <Text style={[styles.errorText, { color: '#DC2626' }]}>
-                {isNetworkError(error || customersError || '') 
+                {isNetworkError(transactionError || customersError || '') 
                   ? 'Network connection failed. Please check your internet connection and try again.'
-                  : (error || customersError)
+                  : (transactionError || customersError)
                 }
               </Text>
               <TouchableOpacity
@@ -654,7 +609,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Text style={styles.retryButtonText}>
-                  {(error || customersError || '').includes('session has expired') ? 'Sign In Again' : 'Retry'}
+                  {(transactionError || customersError || '').includes('session has expired') ? 'Sign In Again' : 'Retry'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -713,7 +668,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
           {/* Premium Customers List - Simplified without loading indicators */}
           <View style={styles.premiumListContainer}>
             <View style={styles.premiumContentContainer}>
-              {!error && !customersError && (
+              {!transactionError && !customersError && (
                 <>
                   {filteredCustomers.length > 0 ? (
                     <View style={styles.premiumCardsContainer}>

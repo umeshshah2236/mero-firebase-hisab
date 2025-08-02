@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLoans } from '@/contexts/LoansContext';
+import { useTransactionEntries } from '@/contexts/TransactionEntriesContext';
 import { useCustomers } from '@/contexts/CustomersContext';
 import AmountInput from '@/components/AmountInput';
 import DatePicker from '@/components/DatePicker';
@@ -28,7 +28,7 @@ export default function AddLoanScreen() {
   const { t } = useLanguage();
   const { theme } = useTheme();
   const { user } = useAuth();
-  const { refreshLoans } = useLoans();
+  const { refreshTransactionEntries } = useTransactionEntries();
   const { addCustomer, searchCustomers } = useCustomers();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
@@ -143,7 +143,7 @@ export default function AddLoanScreen() {
     }
 
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to add a loan.');
+      Alert.alert('Error', 'You must be logged in to add a transaction.');
       return;
     }
 
@@ -168,21 +168,6 @@ export default function AddLoanScreen() {
       return;
     }
     console.log('Session valid, user authenticated:', session.user.id);
-
-    // Test a simple query first
-    try {
-      console.log('Testing simple query...');
-      const { data: testData, error: testError } = await firestoreHelpers.collection('loans').select('count').limit(1);
-      
-      if (testError) {
-        console.error('Test query failed:', testError);
-        throw new Error(`Database access error: ${testError.message}`);
-      }
-      console.log('Test query successful');
-    } catch (testErr) {
-      console.error('Test query exception:', testErr);
-      throw testErr;
-    }
 
     try {
       const parsedLoanAmount = parseFloat(loanAmount);
@@ -213,58 +198,53 @@ export default function AddLoanScreen() {
           customerId = existingCustomer.id;
         } else {
           // Create new customer
-          console.log('Creating new customer for loan...');
+          console.log('Creating new customer for transaction...');
           const customerType = transactionType === 'given' ? 'customer' : 'supplier';
           const newCustomer = await addCustomer({
             name: personName.trim(),
-            phone: null, // No phone provided in loan form
+            phone: null, // No phone provided in transaction form
             customer_type: customerType as 'customer' | 'supplier'
           });
-          customerId = newCustomer.id;
+          customerId = newCustomer.data?.id || '';
           console.log('Created new customer with ID:', customerId);
         }
       } catch (customerError) {
         console.error('Error handling customer:', customerError);
-        // If customer creation fails, we'll still proceed with the old method
+        // If customer creation fails, we'll still proceed with the transaction
         // but log the error for debugging
-        console.warn('Proceeding with loan creation without customer link due to error:', customerError);
+        console.warn('Proceeding with transaction creation without customer link due to error:', customerError);
       }
 
-      const loanData = {
+      // Create the main transaction entry
+      const transactionData = {
         user_id: user.id,
-        person_name: personName.trim(),
-        loan_amount: parsedLoanAmount,
-        interest_rate: 0,
-        loan_date: formattedLoanDate,
-        purpose: purpose.trim() || null,
+        customer_id: customerId || '',
+        customer_name: personName.trim(),
+        amount: parsedLoanAmount,
         transaction_type: transactionType,
-        ...(customerId && { customer_id: customerId }), // Link to customer if available
-        ...(documentSubmitted !== undefined && { is_document_submitted: documentSubmitted }),
+        description: purpose.trim() || null,
+        transaction_date: formattedLoanDate,
+        balance_after: 0,
       };
 
-      console.log('Attempting to save loan with data:', loanData);
-      console.log('Formatted loan date:', formattedLoanDate);
-      console.log('Parsed loan amount:', parsedLoanAmount);
-      console.log('Customer ID:', customerId);
+      console.log('Attempting to save transaction with data:', transactionData);
 
-      // Insert loan
-      console.log('Inserting loan into database...');
-      const { data: insertedLoan, error: loanError } = await firestoreHelpers.collection('loans').insert(loanData).select();
+      // Insert main transaction
+      console.log('Inserting transaction into database...');
+      const result = await firestoreHelpers.addTransactionEntry(transactionData);
 
-      console.log('Loan insert result:', { data: insertedLoan, error: loanError });
+      console.log('Transaction insert result:', result);
 
-      if (loanError) throw loanError;
-
-      if (!insertedLoan) {
-        throw new Error('Loan was not created successfully');
+      if (!result.success) {
+        throw new Error('Transaction was not created successfully');
       }
 
-      console.log('Loan created successfully with ID:', insertedLoan.id);
+      console.log('Transaction created successfully with ID:', result.data.id);
 
-      // Insert repayments if any
+      // Insert repayments as separate transaction entries if any
       if (repayments.length > 0) {
-        console.log('Inserting repayments...');
-        const repaymentInserts = repayments.map(repayment => {
+        console.log('Inserting repayments as separate transactions...');
+        for (const repayment of repayments) {
           const parsedAmount = parseFloat(repayment.amount);
           const formattedDate = formatBSDateForDB(repayment.date);
           
@@ -276,32 +256,39 @@ export default function AddLoanScreen() {
             throw new Error('Invalid repayment date format');
           }
           
-          return {
-            loan_id: insertedLoan.id,
-            repayment_amount: parsedAmount,
-            repayment_date: formattedDate,
+          const repaymentTransactionData = {
+            user_id: user.id,
+            customer_id: customerId || '',
+            customer_name: personName.trim(),
+            amount: parsedAmount,
+            transaction_type: transactionType === 'given' ? 'received' : 'given', // Opposite of main transaction
+            description: `Repayment for ${transactionType === 'given' ? 'loan given' : 'loan received'} on ${formattedLoanDate}`,
+            transaction_date: formattedDate,
+            balance_after: 0,
           };
-        });
 
-        console.log('Repayment data to insert:', repaymentInserts);
+          console.log('Repayment transaction data to insert:', repaymentTransactionData);
 
-        const { data: insertedRepayments, error: repaymentError } = await firestoreHelpers.collection('repayments').insert(repaymentInserts);
+          const repaymentResult = await firestoreHelpers.addTransactionEntry(repaymentTransactionData);
 
-        console.log('Repayment insert result:', { data: insertedRepayments, error: repaymentError });
+          console.log('Repayment transaction insert result:', repaymentResult);
 
-        if (repaymentError) throw repaymentError;
+          if (!repaymentResult.success) {
+            throw new Error('Repayment transaction was not created successfully');
+          }
+        }
       }
 
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
 
-      // Refresh the loans data immediately
-      await refreshLoans();
+      // Refresh the transaction entries data immediately
+      await refreshTransactionEntries();
 
       Alert.alert(
         'Success',
-        'Loan record has been added successfully!',
+        'Transaction record has been added successfully!',
         [
           {
             text: 'OK',
@@ -310,10 +297,10 @@ export default function AddLoanScreen() {
         ]
       );
     } catch (error) {
-      console.error('Error saving loan:', error);
+      console.error('Error saving transaction:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
       
-      let errorMessage = 'Failed to save loan record. Please try again.';
+      let errorMessage = 'Failed to save transaction record. Please try again.';
       
       // Handle Firebase error format
       const firebaseError = error as any;
@@ -325,7 +312,7 @@ export default function AddLoanScreen() {
         errorMessage = 'An unknown error occurred';
       }
       
-      Alert.alert('Error', `Error saving loan: ${errorMessage}`);
+      Alert.alert('Error', `Error saving transaction: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -369,7 +356,7 @@ export default function AddLoanScreen() {
             >
               <X size={24} color="white" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Add Transaction</Text>
+            <Text style={styles.headerTitle}>Add Loan Transaction</Text>
             <TouchableOpacity
               style={[styles.saveButton, { opacity: isLoading ? 0.6 : 1 }]}
               onPress={handleSave}

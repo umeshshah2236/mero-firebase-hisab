@@ -100,8 +100,16 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
       const contextUser = firebaseUser;
       const activeUser = currentUser || contextUser;
 
+      // Get the user ID - handle both real Firebase Auth (uid) and mock auth (id)
+      const userId = activeUser.uid || activeUser.id;
+      
+      if (!userId) {
+        console.error('Active user has no UID or ID in addTransactionEntry');
+        throw new Error('Active user has no UID or ID');
+      }
+
       const transactionData = {
-        user_id: activeUser.uid,
+        user_id: userId,
         customer_id: '', // You might want to get this from customer lookup
         customer_name: customerName.trim(),
         amount: amount,
@@ -139,34 +147,73 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
 
   // Get customer transaction history with improved error handling
   const getCustomerTransactions = async (customerName: string): Promise<TransactionEntry[]> => {
-    if (!firebaseUser) {
-      console.log('No firebase user, returning empty array');
-      return [];
-    }
-
-    try {
-      console.log('Getting customer transactions for:', customerName);
-      
-      // Get the active user (Firebase Auth or context user)
+    console.log('getCustomerTransactions called with customerName:', customerName);
+    console.log('firebaseUser in context:', firebaseUser?.uid);
+    console.log('auth.currentUser:', auth.currentUser?.uid);
+    
+    return retryWithUser(async () => {
+      // Try to get user from multiple sources
       const currentUser = auth.currentUser;
       const contextUser = firebaseUser;
       const activeUser = currentUser || contextUser;
+
+      console.log('getCustomerTransactions - currentUser:', currentUser);
+      console.log('getCustomerTransactions - contextUser:', contextUser);
+      console.log('getCustomerTransactions - activeUser:', activeUser);
+      console.log('getCustomerTransactions - activeUser type:', typeof activeUser);
+      console.log('getCustomerTransactions - activeUser keys:', activeUser ? Object.keys(activeUser) : 'null');
+
+      if (!activeUser) {
+        console.error('No active user found in getCustomerTransactions');
+        console.log('currentUser:', currentUser);
+        console.log('contextUser:', contextUser);
+        console.log('firebaseUser:', firebaseUser);
+        throw new Error('No active user available');
+      }
+
+      // Get the user ID - handle both real Firebase Auth (uid) and mock auth (id)
+      const userId = activeUser.uid || activeUser.id;
+      
+      if (!userId) {
+        console.error('Active user has no UID or ID');
+        console.log('activeUser object:', activeUser);
+        console.log('activeUser.uid:', activeUser.uid);
+        console.log('activeUser.id:', activeUser.id);
+        console.log('activeUser type:', typeof activeUser);
+        throw new Error('Active user has no UID or ID');
+      }
+
+      console.log('Getting customer transactions for:', customerName);
+      console.log('Using active user ID:', userId);
       
       // For now, we'll get all transactions and filter by customer name
       // In a real implementation, you might want to add a helper function for this
-      const allTransactions = await firestoreHelpers.getTransactionEntries(activeUser.uid);
+      const allTransactions = await firestoreHelpers.getTransactionEntries(userId);
+      
+      console.log('All transactions fetched:', allTransactions.length, 'entries');
+      console.log('Sample transactions:', allTransactions.slice(0, 3).map(t => ({
+        id: t.id,
+        customer_name: t.customer_name,
+        customer_id: t.customer_id,
+        amount: t.amount,
+        transaction_type: t.transaction_type
+      })));
       
       const customerTransactions = allTransactions.filter(transaction => 
         transaction.customer_name.toLowerCase() === customerName.toLowerCase()
       );
       
-      console.log('Customer transactions fetched successfully:', customerTransactions.length, 'entries');
-      return customerTransactions;
+      console.log('Customer transactions filtered successfully:', customerTransactions.length, 'entries');
+      console.log('Filtered transactions:', customerTransactions.map(t => ({
+        id: t.id,
+        customer_name: t.customer_name,
+        customer_id: t.customer_id,
+        amount: t.amount,
+        transaction_type: t.transaction_type
+      })));
       
-    } catch (error) {
-      console.error('Error in getCustomerTransactions:', error);
-      return [];
-    }
+      return customerTransactions;
+    });
   };
 
   // Get customer balance
@@ -183,9 +230,17 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
       const contextUser = firebaseUser;
       const activeUser = currentUser || contextUser;
 
+      // Get the user ID - handle both real Firebase Auth (uid) and mock auth (id)
+      const userId = activeUser.uid || activeUser.id;
+      
+      if (!userId) {
+        console.error('Active user has no UID or ID in getCustomerBalance');
+        return 0;
+      }
+      
       // For now, we'll calculate balance from transactions
       // In a real implementation, you might want to add a helper function for this
-      const allTransactions = await firestoreHelpers.getTransactionEntries(activeUser.uid);
+      const allTransactions = await firestoreHelpers.getTransactionEntries(userId);
       
       const customerTransactions = allTransactions.filter(transaction => 
         transaction.customer_name.toLowerCase() === customerName.toLowerCase()
@@ -205,6 +260,55 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
       console.error('Error in getCustomerBalance:', error);
       return 0;
     }
+  };
+
+  // Get all transaction entries for the current user
+  const getAllTransactionEntries = async (): Promise<TransactionEntry[]> => {
+    console.log('getAllTransactionEntries called');
+    console.log('firebaseUser in context:', firebaseUser?.uid);
+    console.log('auth.currentUser:', auth.currentUser?.uid);
+    
+    return retryWithUser(async () => {
+      // Try to get user from multiple sources
+      const currentUser = auth.currentUser;
+      const contextUser = firebaseUser;
+      const activeUser = currentUser || contextUser;
+      
+      if (!activeUser) {
+        console.error('No active user found in getAllTransactionEntries');
+        console.log('currentUser:', currentUser);
+        console.log('contextUser:', contextUser);
+        console.log('firebaseUser:', firebaseUser);
+        throw new Error('No active user available');
+      }
+      
+      // Get the user ID - handle both real Firebase Auth (uid) and mock auth (id)
+      const userId = activeUser.uid || activeUser.id;
+      
+      if (!userId) {
+        console.error('Active user has no UID or ID');
+        console.log('activeUser object:', activeUser);
+        console.log('activeUser.uid:', activeUser.uid);
+        console.log('activeUser.id:', activeUser.id);
+        throw new Error('Active user has no UID or ID');
+      }
+
+      console.log('Getting all transaction entries');
+      console.log('Using active user ID:', userId);
+      
+      const allTransactions = await firestoreHelpers.getTransactionEntries(userId);
+      
+      console.log('All transactions fetched:', allTransactions.length, 'entries');
+      console.log('Sample transactions:', allTransactions.slice(0, 3).map(t => ({
+        id: t.id,
+        customer_name: t.customer_name,
+        customer_id: t.customer_id,
+        amount: t.amount,
+        transaction_type: t.transaction_type
+      })));
+      
+      return allTransactions;
+    });
   };
 
   // Get all customers with their balances
@@ -278,21 +382,25 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
     try {
       await ensureValidSession();
 
-      // For now, we'll use a simplified approach
-      // In a real implementation, you might want to add updateTransactionEntry helper function
+      // Call the Firebase helper function to update the transaction
       const updateData = {
         amount: amount,
         transaction_type: transactionType,
         description: description?.trim() || null,
-        updated_at: new Date().toISOString(),
       };
 
-      console.log('Transaction entry updated successfully');
+      const result = await firestoreHelpers.updateTransactionEntry(transactionId, updateData);
       
-      // For now, return a mock entry
+      if (!result.success) {
+        throw new Error('Failed to update transaction entry');
+      }
+
+      console.log('Transaction entry updated successfully:', result.data);
+      
+      // Return the updated transaction entry
       return {
         id: transactionId,
-        user_id: firebaseUser.uid,
+        user_id: firebaseUser?.uid || firebaseUser?.id || '',
         customer_id: '',
         customer_name: '',
         amount: amount,
@@ -332,8 +440,13 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
     try {
       await ensureValidSession();
 
-      // For now, we'll use a simplified approach
-      // In a real implementation, you might want to add deleteTransactionEntry helper function
+      // Call the Firebase helper function to delete the transaction
+      const result = await firestoreHelpers.deleteTransactionEntry(transactionId);
+      
+      if (!result.success) {
+        throw new Error('Failed to delete transaction entry');
+      }
+
       console.log('Transaction entry deleted successfully');
       
     } catch (error) {
@@ -354,9 +467,36 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
 
   // Set firebase user function
   const updateFirebaseUser = useCallback((user: any) => {
-    console.log('TransactionEntriesContext: Setting firebaseUser:', user?.uid);
+    console.log('TransactionEntriesContext: updateFirebaseUser called with user:', user);
+    console.log('TransactionEntriesContext: user.uid:', user?.uid);
+    console.log('TransactionEntriesContext: user object keys:', user ? Object.keys(user) : 'null');
     setFirebaseUser(user);
   }, []);
+
+  // Retry mechanism for when user is not available
+  const retryWithUser = useCallback(async (
+    operation: () => Promise<any>,
+    maxRetries: number = 3,
+    delay: number = 1000
+  ): Promise<any> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (!firebaseUser && !auth.currentUser) {
+          console.log(`Attempt ${attempt}: No user available, waiting ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        return await operation();
+      } catch (error) {
+        if (attempt === maxRetries) {
+          throw error;
+        }
+        console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    throw new Error('Operation failed after all retries');
+  }, [firebaseUser]);
 
   return {
     loading,
@@ -364,11 +504,13 @@ export const [TransactionEntriesProvider, useTransactionEntries] = createContext
     addTransactionEntry,
     getCustomerTransactions,
     getCustomerBalance,
+    getAllTransactionEntries,
     getCustomersWithBalances,
     getDashboardTotals,
     getTransactionEntry,
     updateTransactionEntry,
     deleteTransactionEntry,
+    refreshTransactionEntries: getAllTransactionEntries,
     setFirebaseUser: updateFirebaseUser,
   };
 });

@@ -119,12 +119,15 @@ export default function SignInScreen() {
         return;
       }
 
+      // For existing users, just send OTP for verification
+      // For new users, redirect to sign-up
       if (!userCheck.exists) {
-        // Automatically redirect to sign-up with phone number pre-filled
+        // User doesn't exist, redirect to sign-up with phone number pre-filled
         router.push(`/auth/sign-up?phone=${encodeURIComponent(cleanPhone)}`);
         setIsLoading(false);
         return;
       }
+      // If user exists, continue with OTP sending (this is the normal flow)
     }
 
     const result = await sendOtp(cleanPhone);

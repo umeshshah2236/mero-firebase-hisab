@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useLoans } from '@/contexts/LoansContext';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { useTransactionEntries, TransactionEntry as DBTransactionEntry } from '@/contexts/TransactionEntriesContext';
 import { useCustomers } from '@/contexts/CustomersContext';
@@ -38,7 +38,7 @@ export default function CustomerDetailScreen() {
   const { theme } = useTheme();
   const { t } = useLanguage();
   const { user } = useAuth();
-  const { loans, refreshLoans, setFirebaseUser } = useLoans();
+  const { setFirebaseUser } = useTransactionEntries();
   const transactionEntriesContext = useTransactionEntries();
   const { deleteCustomer, customers } = useCustomers();
   const insets = useSafeAreaInsets();
@@ -222,9 +222,7 @@ export default function CustomerDetailScreen() {
     
     try {
       console.log('Customer detail: Refreshing all data...');
-      // Force refresh loans data
-      await refreshLoans();
-      // Also refresh transaction entries
+      // Refresh transaction entries
       if (customerName) {
         console.log('Customer detail: Refreshing transaction entries for:', customerName);
         try {
@@ -255,25 +253,27 @@ export default function CustomerDetailScreen() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [refreshLoans, getCustomerTransactions, customerName]);
+  }, [getCustomerTransactions, customerName]);
 
   // Refresh data when screen comes into focus - but only if no data exists
   useFocusEffect(
     React.useCallback(() => {
-      const shouldRefresh = user && loans.length === 0;
+      const shouldRefresh = user && transactionEntries.length === 0;
       if (shouldRefresh) {
-        console.log('Customer detail focused, refreshing loans...');
+        console.log('Customer detail focused, refreshing transaction entries...');
         handleRefresh();
       }
-    }, [user, handleRefresh, loans.length])
+    }, [user, handleRefresh, transactionEntries.length])
   );
 
   // Load transaction entries on mount and when customer changes
   useEffect(() => {
-    if (customerName) {
+    if (customerName && user) {
       const loadTransactionEntries = async () => {
         try {
           console.log('Loading transaction entries for customer:', customerName);
+          console.log('Current user:', user?.id);
+          
           const entries = await getCustomerTransactions(customerName);
           console.log('Loaded transaction entries:', entries.length);
           setTransactionEntries(entries);
@@ -290,49 +290,52 @@ export default function CustomerDetailScreen() {
         }
       };
       loadTransactionEntries();
+    } else if (customerName && !user) {
+      console.log('Customer name provided but no user available, waiting for user...');
     }
-  }, [customerName, getCustomerTransactions]);
+  }, [customerName, getCustomerTransactions, user]);
 
   // Get customer transactions and calculate running balance
   const customerTransactions = useMemo(() => {
-    const customerLoans = loans.filter(loan => 
-      loan.person_name.toLowerCase() === customerName.toLowerCase()
+    // Use the new transaction entries instead of loans
+    const customerTransactions = transactionEntries.filter(transaction => 
+      transaction.customer_name.toLowerCase() === customerName.toLowerCase()
     );
 
     // Sort by created_at timestamp (oldest first) to calculate running balance correctly
     // This ensures new entries are processed in the correct chronological order
-    const sortedLoans = customerLoans.sort((a, b) => {
-      const dateA = new Date(a.created_at || a.loan_date).getTime();
-      const dateB = new Date(b.created_at || b.loan_date).getTime();
+    const sortedTransactions = customerTransactions.sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
       return dateA - dateB;
     });
 
     let runningBalance = 0;
     const transactions: TransactionEntry[] = [];
 
-    sortedLoans.forEach(loan => {
+    sortedTransactions.forEach(transaction => {
       // Calculate balance impact
-      const balanceImpact = loan.transaction_type === 'given' 
-        ? loan.loan_amount  // YOU GAVE: customer owes you more
-        : -loan.loan_amount; // YOU GOT: customer owes you less
+      const balanceImpact = transaction.transaction_type === 'given' 
+        ? transaction.amount  // YOU GAVE: customer owes you more
+        : -transaction.amount; // YOU GOT: customer owes you less
       
       runningBalance += balanceImpact;
 
-      const formattedTime = formatNepaliDateTime(loan.loan_date, loan.created_at);
+      const formattedTime = formatNepaliDateTime(transaction.transaction_date, transaction.created_at);
       console.log('Transaction entry:', {
-        id: loan.id,
-        loan_date: loan.loan_date,
-        created_at: loan.created_at,
+        id: transaction.id,
+        transaction_date: transaction.transaction_date,
+        created_at: transaction.created_at,
         formatted_time: formattedTime
       });
       
       transactions.push({
-        id: loan.id,
-        date: loan.loan_date,
+        id: transaction.id,
+        date: transaction.transaction_date,
         time: formattedTime,
-        amount: loan.loan_amount,
-        type: loan.transaction_type,
-        description: loan.notes || undefined,
+        amount: transaction.amount,
+        type: transaction.transaction_type,
+        description: transaction.description || undefined,
         balance: runningBalance
       });
     });
@@ -340,13 +343,13 @@ export default function CustomerDetailScreen() {
     // Sort by created_at timestamp (newest first) for UI display
     // This ensures new entries always appear at the top
     return transactions.sort((a, b) => {
-      const entryA = sortedLoans.find(loan => loan.id === a.id);
-      const entryB = sortedLoans.find(loan => loan.id === b.id);
-      const dateA = new Date(entryA?.created_at || entryA?.loan_date || a.date).getTime();
-      const dateB = new Date(entryB?.created_at || entryB?.loan_date || b.date).getTime();
+      const entryA = sortedTransactions.find(transaction => transaction.id === a.id);
+      const entryB = sortedTransactions.find(transaction => transaction.id === b.id);
+      const dateA = new Date(entryA?.created_at || a.date).getTime();
+      const dateB = new Date(entryB?.created_at || b.date).getTime();
       return dateB - dateA; // Newest first
     });
-  }, [loans, customerName, formatNepaliDateTime]);
+  }, [transactionEntries, customerName, formatNepaliDateTime]);
 
   // Group transactions by date
   const groupedTransactions = useMemo(() => {
@@ -354,36 +357,36 @@ export default function CustomerDetailScreen() {
     const dateGroups = new Map<string, TransactionEntry[]>();
 
     customerTransactions.forEach(transaction => {
-      // Use the loan's created_at timestamp for grouping instead of loan_date
-      const loanEntry = loans.find(loan => loan.id === transaction.id);
-      let groupingDate: Date;
-      let dateKey: string;
-      
-      if (loanEntry?.created_at) {
-        groupingDate = new Date(loanEntry.created_at);
-        // Convert to BS date for proper grouping
-        const bsDate = convertADToBS(groupingDate);
-        if (bsDate) {
-          dateKey = `${bsDate.year}-${bsDate.month.toString().padStart(2, '0')}-${bsDate.day.toString().padStart(2, '0')}`;
-        } else {
-          dateKey = groupingDate.toISOString().split('T')[0];
-        }
-      } else {
-        // Fallback: try to parse the transaction date
-        if (transaction.date && transaction.date.includes('-')) {
-          // If it's in BS format, use it directly for grouping
-          dateKey = transaction.date;
-          groupingDate = new Date(); // Use current date for display purposes
-        } else {
-          groupingDate = new Date(transaction.date);
+              // Use the transaction's created_at timestamp for grouping instead of transaction_date
+        const transactionEntry = transactionEntries.find(entry => entry.id === transaction.id);
+        let groupingDate: Date;
+        let dateKey: string;
+        
+        if (transactionEntry?.created_at) {
+          groupingDate = new Date(transactionEntry.created_at);
+          // Convert to BS date for proper grouping
           const bsDate = convertADToBS(groupingDate);
           if (bsDate) {
             dateKey = `${bsDate.year}-${bsDate.month.toString().padStart(2, '0')}-${bsDate.day.toString().padStart(2, '0')}`;
           } else {
             dateKey = groupingDate.toISOString().split('T')[0];
           }
+        } else {
+          // Fallback: try to parse the transaction date
+          if (transaction.date && transaction.date.includes('-')) {
+            // If it's in BS format, use it directly for grouping
+            dateKey = transaction.date;
+            groupingDate = new Date(); // Use current date for display purposes
+          } else {
+            groupingDate = new Date(transaction.date);
+            const bsDate = convertADToBS(groupingDate);
+            if (bsDate) {
+              dateKey = `${bsDate.year}-${bsDate.month.toString().padStart(2, '0')}-${bsDate.day.toString().padStart(2, '0')}`;
+            } else {
+              dateKey = groupingDate.toISOString().split('T')[0];
+            }
+          }
         }
-      }
       
       if (!dateGroups.has(dateKey)) {
         dateGroups.set(dateKey, []);
@@ -464,17 +467,17 @@ export default function CustomerDetailScreen() {
           displayDate,
           entries: entries.sort((a, b) => {
             // Sort entries within the same day by created_at timestamp (newest first)
-            const entryA = loans.find(loan => loan.id === a.id);
-            const entryB = loans.find(loan => loan.id === b.id);
-            const dateA = new Date(entryA?.created_at || entryA?.loan_date || a.date).getTime();
-            const dateB = new Date(entryB?.created_at || entryB?.loan_date || b.date).getTime();
+            const entryA = transactionEntries.find(transaction => transaction.id === a.id);
+            const entryB = transactionEntries.find(transaction => transaction.id === b.id);
+            const dateA = new Date(entryA?.created_at || a.date).getTime();
+            const dateB = new Date(entryB?.created_at || b.date).getTime();
             return dateB - dateA; // Newest first within the day
           })
         });
       });
 
     return groups;
-  }, [customerTransactions, formatNepaliDate, loans, t]);
+  }, [customerTransactions, formatNepaliDate, transactionEntries, t]);
 
 
 
@@ -517,13 +520,22 @@ export default function CustomerDetailScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
+    // Find the customer by name to get their ID
+    const customerToReceive = customers.find(c => c.name === customerName);
+    
+    if (!customerToReceive) {
+      Alert.alert('Error', 'Customer not found');
+      return;
+    }
+    
     // Navigate to Add Receive Entry screen
-    console.log('TO RECEIVE pressed for:', customerName);
+    console.log('TO RECEIVE pressed for:', customerName, 'with ID:', customerToReceive.id);
     router.push({
       pathname: '/(tabs)/(home)/add-receive-entry',
       params: {
         customerName,
-        customerPhone
+        customerPhone,
+        customerId: customerToReceive.id
       }
     });
   };
@@ -532,13 +544,22 @@ export default function CustomerDetailScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
+    // Find the customer by name to get their ID
+    const customerToGive = customers.find(c => c.name === customerName);
+    
+    if (!customerToGive) {
+      Alert.alert('Error', 'Customer not found');
+      return;
+    }
+    
     // Navigate to Add Give Entry screen
-    console.log('TO GIVE pressed for:', customerName);
+    console.log('TO GIVE pressed for:', customerName, 'with ID:', customerToGive.id);
     router.push({
       pathname: '/(tabs)/(home)/add-give-entry',
       params: {
         customerName,
-        customerPhone
+        customerPhone,
+        customerId: customerToGive.id
       }
     });
   };
@@ -550,19 +571,20 @@ export default function CustomerDetailScreen() {
     console.log('Edit button clicked for entry:', entry);
     console.log('Available transaction entries:', transactionEntries);
     
-    // Find the corresponding loan entry from the loans context
-    const loanEntry = loans.find(loan => loan.id === entry.id);
+    // Find the corresponding transaction entry from the transaction entries
+    const transactionEntry = transactionEntries.find(transaction => transaction.id === entry.id);
     
-    if (loanEntry) {
-      console.log('Found loan entry for editing:', loanEntry);
+    if (transactionEntry) {
+      console.log('Found transaction entry for editing:', transactionEntry);
       
       // Navigate to dedicated edit screen based on transaction type
       const editParams = {
         customerName,
         customerPhone,
-        editTransactionId: loanEntry.id,
-        editDescription: loanEntry.notes || '',
-        editDate: loanEntry.loan_date
+        editTransactionId: transactionEntry.id,
+        editAmount: transactionEntry.amount.toString(),
+        editDescription: transactionEntry.description || '',
+        editDate: transactionEntry.transaction_date
       };
       
       console.log('Navigating with edit params:', editParams);
@@ -579,7 +601,7 @@ export default function CustomerDetailScreen() {
         });
       }
     } else {
-      console.error('Could not find loan entry for editing:', entry.id);
+      console.error('Could not find transaction entry for editing:', entry.id);
       Alert.alert('Error', 'Could not find transaction for editing');
     }
   };

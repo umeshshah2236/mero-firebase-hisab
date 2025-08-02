@@ -465,8 +465,8 @@ export default function HomeScreen() {
       {isFirstLaunch && isPageFullyLoaded && !isLoading && !authLoading && !themeLoading && (
         <NameInputModal
           visible={true}
-          onSave={setUserName}
-          onSkip={skipNameEntry}
+          onNameSet={setUserName}
+          onClose={skipNameEntry}
         />
       )}
     </View>

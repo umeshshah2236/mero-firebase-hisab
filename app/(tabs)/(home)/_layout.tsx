@@ -16,8 +16,8 @@ export default function HomeLayout() {
       <Stack.Screen name="customer-detail" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
       <Stack.Screen name="add-receive-entry" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
       <Stack.Screen name="add-give-entry" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
-      <Stack.Screen name="calculator" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
-      <Stack.Screen name="karobar" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+      <Stack.Screen name="edit-give-entry" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+      <Stack.Screen name="edit-receive-entry" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
     </Stack>
   );
 }

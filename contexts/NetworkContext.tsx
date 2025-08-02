@@ -131,13 +131,14 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
             break;
 
           case 'loan':
+            // Loans are now handled as transactions
             if (operation.type === 'CREATE') {
-              result = await firestoreHelpers.addLoan(operation.data);
+              result = await firestoreHelpers.addTransactionEntry(operation.data);
             } else if (operation.type === 'UPDATE') {
-              // You might want to add updateLoan helper function
+              // You might want to add updateTransactionEntry helper function
               result = { success: true };
             } else if (operation.type === 'DELETE') {
-              // You might want to add deleteLoan helper function
+              // You might want to add deleteTransactionEntry helper function
               result = { success: true };
             }
             break;

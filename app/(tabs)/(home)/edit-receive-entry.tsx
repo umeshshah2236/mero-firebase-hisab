@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLoans } from '@/contexts/LoansContext';
+import { useTransactionEntries } from '@/contexts/TransactionEntriesContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import AmountInput from '@/components/AmountInput';
 import DatePicker from '@/components/DatePicker';
@@ -19,7 +19,7 @@ import { BS_MONTHS } from '@/constants/calendar';
 export default function EditReceiveEntryScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
-  const { updateLoan, deleteLoan, setFirebaseUser } = useLoans();
+  const { updateTransactionEntry, deleteTransactionEntry, setFirebaseUser } = useTransactionEntries();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
@@ -107,7 +107,7 @@ export default function EditReceiveEntryScreen() {
     setIsLoading(true);
     
     try {
-      console.log('Updating loan with ID:', editTransactionId);
+      console.log('Updating transaction with ID:', editTransactionId);
       console.log('Update data:', {
         amount: parseFloat(formData.amount),
         description: formData.itemDescription || undefined
@@ -116,11 +116,11 @@ export default function EditReceiveEntryScreen() {
       // Convert selected date to BS date string format
       const bsDateString = `${selectedDate.year}-${selectedDate.month.toString().padStart(2, '0')}-${selectedDate.day.toString().padStart(2, '0')}`;
       
-      await updateLoan(
+      await updateTransactionEntry(
         editTransactionId,
         parseFloat(formData.amount),
-        formData.itemDescription || undefined,
-        bsDateString
+        'received',
+        formData.itemDescription || undefined
       );
       
       console.log('Receive entry updated successfully');
@@ -175,9 +175,9 @@ export default function EditReceiveEntryScreen() {
     const performDelete = async () => {
       setIsLoading(true);
       try {
-        console.log('Deleting loan with ID:', editTransactionId);
-        await deleteLoan(editTransactionId);
-        console.log('Loan deleted successfully');
+        console.log('Deleting transaction with ID:', editTransactionId);
+        await deleteTransactionEntry(editTransactionId);
+        console.log('Transaction deleted successfully');
         
         // Navigate back immediately for both platforms
         const navigateBack = () => {

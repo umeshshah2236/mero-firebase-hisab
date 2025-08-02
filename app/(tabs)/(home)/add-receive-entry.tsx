@@ -27,6 +27,7 @@ export default function AddReceiveEntryScreen() {
   
   const customerName = params.customerName as string || '';
   const customerPhone = params.customerPhone as string || '';
+  const customerId = params.customerId as string || '';
   const editTransactionId = params.editTransactionId as string || '';
   const editAmount = params.editAmount as string || '';
   const editDescription = params.editDescription as string || '';
@@ -170,26 +171,27 @@ export default function AddReceiveEntryScreen() {
         // Create new transaction entry using selected date
         const bsDateString = `${selectedDate.year}-${selectedDate.month.toString().padStart(2, '0')}-${selectedDate.day.toString().padStart(2, '0')}`;
         
-        const entriesData = formData.entries.map(entry => ({
-          user_id: user.id,
-          person_name: customerName,
-          loan_amount: parseFloat(entry.amount),
-          interest_rate: 0, // No interest for receive entries
-          loan_date: bsDateString,
-          is_document_submitted: false,
-          notes: entry.description || null,
-          purpose: 'Receive Entry',
-          transaction_type: 'received' as const,
-          created_at: new Date().toISOString() // Explicitly set UTC timestamp
-        }));
-        
-        try {
-          const result = await firestoreHelpers.addLoan(entriesData);
-          console.log('Loan added successfully:', result.data);
-        } catch (error) {
-          console.error('Error saving receive entry:', error);
-          Alert.alert(t('error'), t('failedToSaveEntry'));
-          return;
+        // Save each entry as a separate transaction
+        for (const entry of formData.entries) {
+          const transactionData = {
+            user_id: user.id,
+            customer_id: customerId, // Use the actual customer ID
+            customer_name: customerName,
+            amount: parseFloat(entry.amount),
+            transaction_type: 'received' as const,
+            description: entry.description || null,
+            transaction_date: bsDateString,
+            balance_after: 0, // Will be calculated by the helper function
+          };
+          
+          try {
+            const result = await firestoreHelpers.addTransactionEntry(transactionData);
+            console.log('Transaction added successfully:', result.data);
+          } catch (error) {
+            console.error('Error saving receive entry:', error);
+            Alert.alert(t('error'), t('failedToSaveEntry'));
+            return;
+          }
         }
         
         console.log('Receive entry saved successfully');

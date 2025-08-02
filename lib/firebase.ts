@@ -1,8 +1,11 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, PhoneAuthProvider, signInWithCredential, onAuthStateChanged, signOut as firebaseSignOut, User as FirebaseUser } from 'firebase/auth';
+import { initializeApp, getApp } from 'firebase/app';
+import { initializeAuth, getAuth, PhoneAuthProvider, signInWithCredential, onAuthStateChanged, signOut as firebaseSignOut, User as FirebaseUser } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, deleteDoc, query, where, orderBy, limit, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { TransactionEntry } from '@/contexts/TransactionEntriesContext';
+
+// Module-level initialization guard
+let isInitialized = false;
 
 // Firebase configuration - replace with your actual Firebase config
 const firebaseConfig = {
@@ -23,49 +26,96 @@ if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.proj
   console.error('Missing Firebase environment variables');
 }
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Firebase instances (singleton pattern)
+let firebaseApp: any = null;
+let firebaseAuth: any = null;
+let firebaseDb: any = null;
+let isAppInitialized = false;
+let isAuthInitialized = false;
+let isDbInitialized = false;
+
+// Initialize Firebase App
+const initializeFirebaseApp = () => {
+  if (!isAppInitialized) {
+    try {
+      firebaseApp = initializeApp(firebaseConfig);
+      isAppInitialized = true;
+      console.log('Firebase App initialized successfully');
+    } catch (error: any) {
+      if (error.code === 'app/duplicate-app') {
+        console.log('Firebase App already initialized, using existing instance');
+        firebaseApp = getApp();
+        isAppInitialized = true;
+      } else {
+        console.error('Firebase App initialization error:', error);
+        throw error;
+      }
+    }
+  }
+  return firebaseApp;
+};
 
 // Initialize Firebase Auth
-export const auth = getAuth(app);
+const initializeFirebaseAuth = () => {
+  if (!isAuthInitialized) {
+    try {
+      firebaseAuth = initializeAuth(firebaseApp);
+      isAuthInitialized = true;
+      console.log('Firebase Auth initialized successfully with persistence');
+    } catch (error: any) {
+      if (error.code === 'auth/already-initialized') {
+        console.log('Firebase Auth already initialized, using existing instance');
+        firebaseAuth = getAuth(firebaseApp);
+        isAuthInitialized = true;
+      } else {
+        console.error('Firebase Auth initialization error:', error);
+        throw error;
+      }
+    }
+  }
+  return firebaseAuth;
+};
 
 // Initialize Firestore
-export const db = getFirestore(app);
+const initializeFirestore = () => {
+  if (!isDbInitialized) {
+    try {
+      firebaseDb = getFirestore(firebaseApp);
+      isDbInitialized = true;
+    } catch (error: any) {
+      console.warn('Firestore initialization error:', error);
+      isDbInitialized = true;
+    }
+  }
+  return firebaseDb;
+};
+
+// Main initialization function
+const initializeFirebase = () => {
+  if (isInitialized) {
+    console.log('Firebase already initialized, returning existing instances');
+    return { app: firebaseApp, auth: firebaseAuth, db: firebaseDb };
+  }
+
+  console.log('Initializing Firebase...');
+  
+  const app = initializeFirebaseApp();
+  const auth = initializeFirebaseAuth();
+  const db = initializeFirestore();
+  
+  isInitialized = true;
+  console.log('Firebase initialization complete');
+  
+  return { app, auth, db };
+};
+
+// Initialize Firebase
+const firebaseInstances = initializeFirebase();
+
+export const auth = firebaseInstances.auth;
+export const db = firebaseInstances.db;
 
 console.log('Firebase initialized with project ID:', firebaseConfig.projectId);
-
-// Custom storage for Firebase Auth persistence
-class FirebaseStorage {
-  async getItem(key: string): Promise<string | null> {
-    if (Platform.OS === 'web') {
-      if (typeof localStorage === 'undefined') {
-        return null;
-      }
-      return localStorage.getItem(key);
-    }
-    return AsyncStorage.getItem(key);
-  }
-
-  async removeItem(key: string): Promise<void> {
-    if (Platform.OS === 'web') {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem(key);
-      }
-      return;
-    }
-    return AsyncStorage.removeItem(key);
-  }
-
-  async setItem(key: string, value: string): Promise<void> {
-    if (Platform.OS === 'web') {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(key, value);
-      }
-      return;
-    }
-    return AsyncStorage.setItem(key, value);
-  }
-}
 
 // Simple connection test
 export const testFirebaseConnection = async (): Promise<boolean> => {
@@ -258,49 +308,30 @@ export const firestoreHelpers = {
     }
   },
 
-  // Add a new loan
-  async addLoan(loanData: any) {
-    try {
-      const docRef = await addDoc(collection(db, 'loans'), {
-        ...loanData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-      return { success: true, data: { id: docRef.id, ...loanData } };
-    } catch (error) {
-      console.error('Error adding loan:', error);
-      throw error;
-    }
-  },
-
-  // Get loans for a user
-  async getLoans(userId: string) {
-    try {
-      const q = query(
-        collection(db, 'loans'),
-        where('user_id', '==', userId),
-        orderBy('created_at', 'desc')
-      );
-      const querySnapshot = await getDocs(q);
-      const loans = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      return loans;
-    } catch (error) {
-      console.error('Error getting loans:', error);
-      throw error;
-    }
-  },
-
-  // Add a new transaction entry
+  // Add a new transaction entry (renamed from addLoan)
   async addTransactionEntry(transactionData: any) {
     try {
-      const docRef = await addDoc(collection(db, 'transaction_entries'), {
-        ...transactionData,
+      console.log('=== ADDING TRANSACTION ENTRY ===');
+      console.log('Transaction data:', transactionData);
+      
+      const transactionDoc = {
+        user_id: transactionData.user_id,
+        customer_id: transactionData.customer_id || '',
+        customer_name: transactionData.customer_name,
+        amount: transactionData.amount,
+        transaction_type: transactionData.transaction_type, // 'given' or 'received'
+        description: transactionData.description || null,
+        transaction_date: transactionData.transaction_date,
+        balance_after: transactionData.balance_after || 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      });
+      };
+      
+      console.log('Document to save:', transactionDoc);
+      
+      const docRef = await addDoc(collection(db, 'transaction_entries'), transactionDoc);
+      
+      console.log('Transaction saved successfully with ID:', docRef.id);
       return { success: true, data: { id: docRef.id, ...transactionData } };
     } catch (error) {
       console.error('Error adding transaction entry:', error);
@@ -308,25 +339,81 @@ export const firestoreHelpers = {
     }
   },
 
-  // Get transaction entries for a user
-  async getTransactionEntries(userId: string) {
+  // Get transaction entries for a user (renamed from getLoans)
+  async getTransactionEntries(userId: string): Promise<TransactionEntry[]> {
     try {
+      console.log('=== GETTING TRANSACTION ENTRIES ===');
+      console.log('User ID:', userId);
+      
       const q = query(
         collection(db, 'transaction_entries'),
-        where('user_id', '==', userId),
-        orderBy('created_at', 'desc')
+        where('user_id', '==', userId)
+        // Temporarily removed orderBy to test data saving
+        // orderBy('created_at', 'desc')
       );
       const querySnapshot = await getDocs(q);
       const entries = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      return entries;
+      
+      console.log('Raw query results:', entries.length, 'entries');
+      console.log('Sample entries:', entries.slice(0, 3).map((e: any) => ({
+        id: e.id,
+        customer_name: e.customer_name,
+        customer_id: e.customer_id,
+        amount: e.amount,
+        transaction_type: e.transaction_type
+      })));
+      
+      // Sort in memory instead
+      const sortedEntries = entries.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      console.log('Sorted entries:', sortedEntries.length, 'entries');
+      return sortedEntries as TransactionEntry[];
     } catch (error) {
       console.error('Error getting transaction entries:', error);
       throw error;
     }
   },
+
+  // Update a transaction entry
+  async updateTransactionEntry(transactionId: string, updates: any) {
+    try {
+      console.log('=== UPDATING TRANSACTION ENTRY ===');
+      console.log('Transaction ID:', transactionId);
+      console.log('Updates:', updates);
+      
+      const transactionRef = doc(db, 'transaction_entries', transactionId);
+      await updateDoc(transactionRef, {
+        ...updates,
+        updated_at: new Date().toISOString(),
+      });
+      
+      console.log('Transaction updated successfully');
+      return { success: true, data: { id: transactionId, ...updates } };
+    } catch (error) {
+      console.error('Error updating transaction entry:', error);
+      throw error;
+    }
+  },
+
+  // Delete a transaction entry
+  async deleteTransactionEntry(transactionId: string) {
+    try {
+      console.log('=== DELETING TRANSACTION ENTRY ===');
+      console.log('Transaction ID:', transactionId);
+      
+      const transactionRef = doc(db, 'transaction_entries', transactionId);
+      await deleteDoc(transactionRef);
+      
+      console.log('Transaction deleted successfully');
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting transaction entry:', error);
+      throw error;
+    }
+  },
 };
 
-export default app; 
+export default firebaseApp; 

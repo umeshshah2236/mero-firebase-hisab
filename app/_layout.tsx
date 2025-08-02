@@ -9,13 +9,13 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { UserProfileProvider } from "@/contexts/UserProfileContext";
-import { LoansProvider, useLoans } from "@/contexts/LoansContext";
 import { CustomersProvider, useCustomers } from "@/contexts/CustomersContext";
 import { TransactionEntriesProvider, useTransactionEntries } from "@/contexts/TransactionEntriesContext";
 import { NetworkProvider } from "@/contexts/NetworkContext";
 import { testFirebaseConnectionDetailed } from "@/lib/firebase";
 import CustomSplashScreen from "@/components/SplashScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import NameInputModal from "@/components/NameInputModal";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -36,7 +36,7 @@ const queryClient = new QueryClient({
 });
 
 function RootLayoutNav() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, showNameInput, handleNameSet, setShowNameInput } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -90,31 +90,40 @@ function RootLayoutNav() {
   }, [pathname, isAuthenticated, router]);
 
   return (
-    <Stack screenOptions={{ 
-      headerBackTitle: "Back",
-      gestureEnabled: true,
-      animation: 'slide_from_right'
-    }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen 
-        name="auth/sign-in" 
-        options={{ 
-          headerShown: false, 
-          headerBackVisible: false,
-          gestureEnabled: false // Disable swipe back from login
-        }} 
+    <>
+      <Stack screenOptions={{ 
+        headerBackTitle: "Back",
+        gestureEnabled: true,
+        animation: 'slide_from_right'
+      }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen 
+          name="auth/sign-in" 
+          options={{ 
+            headerShown: false, 
+            headerBackVisible: false,
+            gestureEnabled: false // Disable swipe back from login
+          }} 
+        />
+        <Stack.Screen 
+          name="auth/sign-up" 
+          options={{ 
+            headerShown: false,
+            gestureEnabled: true
+          }} 
+        />
+        <Stack.Screen name="privacy-policy" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="terms-of-service" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="about" options={{ presentation: 'modal' }} />
+      </Stack>
+      
+      {/* Name Input Modal */}
+      <NameInputModal
+        visible={showNameInput}
+        onClose={() => setShowNameInput(false)}
+        onNameSet={handleNameSet}
       />
-      <Stack.Screen 
-        name="auth/sign-up" 
-        options={{ 
-          headerShown: false,
-          gestureEnabled: true
-        }} 
-      />
-      <Stack.Screen name="privacy-policy" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="terms-of-service" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="about" options={{ presentation: 'modal' }} />
-    </Stack>
+    </>
   );
 }
 
@@ -123,26 +132,31 @@ function UserSyncProvider({ children }: { children: React.ReactNode }) {
   const { firebaseUser } = useAuth();
   
   // Always call hooks in the same order
-  const loansContext = useLoans();
   const customersContext = useCustomers();
   const transactionEntriesContext = useTransactionEntries();
 
   React.useEffect(() => {
+    console.log('UserSyncProvider: firebaseUser changed:', firebaseUser?.uid);
+    
     // Sync the firebase user to all contexts
     try {
-      if (loansContext && typeof loansContext.setFirebaseUser === 'function') {
-        loansContext.setFirebaseUser(firebaseUser);
-      }
       if (customersContext && typeof customersContext.setFirebaseUser === 'function') {
+        console.log('UserSyncProvider: Syncing to customersContext');
         customersContext.setFirebaseUser(firebaseUser);
+      } else {
+        console.log('UserSyncProvider: customersContext.setFirebaseUser not available');
       }
+      
       if (transactionEntriesContext && typeof transactionEntriesContext.setFirebaseUser === 'function') {
+        console.log('UserSyncProvider: Syncing to transactionEntriesContext');
         transactionEntriesContext.setFirebaseUser(firebaseUser);
+      } else {
+        console.log('UserSyncProvider: transactionEntriesContext.setFirebaseUser not available');
       }
     } catch (error) {
       console.error('Error syncing firebase user to contexts:', error);
     }
-  }, [firebaseUser, loansContext, customersContext, transactionEntriesContext]);
+  }, [firebaseUser, customersContext, transactionEntriesContext]);
 
   return <>{children}</>;
 }
@@ -221,17 +235,15 @@ export default function RootLayout() {
                     <NetworkProvider>
                       <AuthProvider>
                         <UserProfileProvider>
-                          <LoansProvider>
-                            <CustomersProvider>
-                              <TransactionEntriesProvider>
-                                <UserSyncProvider>
-                                  <GestureHandlerRootView style={{ flex: 1 }}>
-                                    <RootLayoutNav />
-                                  </GestureHandlerRootView>
-                                </UserSyncProvider>
-                              </TransactionEntriesProvider>
-                            </CustomersProvider>
-                          </LoansProvider>
+                          <CustomersProvider>
+                            <TransactionEntriesProvider>
+                              <UserSyncProvider>
+                                <GestureHandlerRootView style={{ flex: 1 }}>
+                                  <RootLayoutNav />
+                                </GestureHandlerRootView>
+                              </UserSyncProvider>
+                            </TransactionEntriesProvider>
+                          </CustomersProvider>
                         </UserProfileProvider>
                       </AuthProvider>
                     </NetworkProvider>
