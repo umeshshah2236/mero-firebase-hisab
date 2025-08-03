@@ -336,8 +336,10 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
         return { success: false, error: 'Please enter a valid 6-digit OTP' };
       }
 
-      // Use the same phone formatting logic as sendOtp
-      let cleanPhone = phone.trim();
+      console.log('🔐 Starting OTP verification');
+        
+        // Use the same phone formatting logic as sendOtp
+        let cleanPhone = phone.trim();
       
       // If phone doesn't start with +, try to format it
       if (!cleanPhone.startsWith('+')) {
@@ -364,7 +366,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
 
       console.log('OTP verification successful with Aakash SMS');
 
-      // Test Firebase connection for user data management
+      // Test Firebase connection
       const connectionTest = await testFirebaseConnectionDetailed();
       if (!connectionTest.success) {
         console.error('Connection test failed:', connectionTest.error);
@@ -379,33 +381,31 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
       let existingProfile: any = null;
       try {
         existingProfile = await firestoreHelpers.getUserProfile(userId);
-        console.log('Existing profile found:', existingProfile);
+        console.log('Existing profile found');
       } catch (profileError) {
         console.log('No existing profile found, will create new one');
       }
       
-      // Create or update user profile in Firestore
+      // Create or update user profile
       try {
         let displayName = '';
         
         if (existingProfile && existingProfile.name) {
-          // Use existing name if available
           displayName = existingProfile.name;
-          console.log('Using existing name:', displayName);
+          console.log('Using existing name');
         } else {
-          // Create a temporary name - user can update it later
           const phoneDigits = cleanPhone.replace('+977', '');
           displayName = `User ${phoneDigits.slice(-4)}`;
-          console.log('Created temporary name:', displayName);
+          console.log('Created temporary name');
         }
         
         await firestoreHelpers.upsertUserProfile(userId, {
           name: displayName,
           phone: cleanPhone,
         });
-        console.log('User profile created/updated in Firestore with name:', displayName);
+        console.log('User profile created/updated in Firestore');
       } catch (profileError) {
-        console.log('Profile creation failed, continuing with mock user:', profileError);
+        console.error('Profile creation failed, continuing with mock user:', profileError);
       }
       
       // Create a mock user object for the app state
@@ -445,16 +445,15 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
       // Set the Firebase user in state
       setFirebaseUser(mockUser);
       
-      // 🚀 PRELOAD DATA AND PREPARE UI DURING VERIFICATION
-      console.log('🚀 Starting data preload and UI preparation during OTP verification...');
+      // Preload user data for faster dashboard loading
+      console.log('🚀 Starting data preload during OTP verification...');
+      
       try {
-        // Preload customers and transactions in parallel for faster loading
-        const preloadPromises = [
-          firestoreHelpers.getCustomers(userId),
-          firestoreHelpers.getTransactionEntries(userId) // Fixed: use getTransactionEntries instead of getAllTransactionEntries
-        ];
+        const [preloadedCustomers, preloadedTransactions] = await Promise.all([
+          firestoreHelpers.getCustomers(userId).catch(() => []),
+          firestoreHelpers.getTransactionEntries(userId).catch(() => [])
+        ]);
         
-        const [preloadedCustomers, preloadedTransactions] = await Promise.all(preloadPromises);
         console.log('✅ Data preloaded successfully:', {
           customers: preloadedCustomers?.length || 0,
           transactions: preloadedTransactions?.length || 0
@@ -470,10 +469,8 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
         };
         
         console.log('✅ UI preparation complete - ready for instant display');
-        
       } catch (preloadError) {
-        console.warn('⚠️ Data preload failed, will load normally:', preloadError);
-        // Continue with normal flow if preload fails
+        console.warn('⚠️ Data preload failed, will load normally');
       }
       
       // Handle the user profile

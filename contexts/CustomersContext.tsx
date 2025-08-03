@@ -116,8 +116,7 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
       const contextUser = firebaseUser;
       const activeUser = currentUser || contextUser;
       
-      // Get the user ID - handle both real Firebase Auth (uid) and mock auth (id)
-      const userId = activeUser.uid || activeUser.id;
+      // userId is already declared at the top of the function
       
       if (!userId) {
         console.error('Active user has no UID or ID in fetchCustomers');
@@ -197,7 +196,6 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
   const addCustomer = async (customerData: any) => {
     try {
       console.log('=== ADD CUSTOMER START ===');
-      console.log('Original customer data:', customerData);
       console.log('Firebase user ID:', firebaseUser?.uid);
       console.log('Network status:', isOnline ? 'Online' : 'Offline');
       
@@ -215,7 +213,7 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
         user_id: userId
       };
       
-      console.log('Customer data with user_id:', customerDataWithUserId);
+      console.log('Customer data with user_id prepared');
       
       // If offline, add to pending operations and local state
       if (!isOnline) {
@@ -250,7 +248,7 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
       
       const result = await firestoreHelpers.addCustomer(customerDataWithUserId);
 
-      console.log('Customer added successfully:', result.data);
+      console.log('Customer added successfully');
       
       // Update local state
       setCustomers(prev => [result.data, ...prev]);
@@ -268,7 +266,6 @@ export const [CustomersProvider, useCustomers] = createContextHook(() => {
     try {
       console.log('=== UPDATE CUSTOMER START ===');
       console.log('Customer ID:', id);
-      console.log('Updates:', updates);
       console.log('Network status:', isOnline ? 'Online' : 'Offline');
       
       // Find the customer to get the old name

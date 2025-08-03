@@ -215,7 +215,7 @@ export default function EditTransactionModal({
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
               Description (Optional)
             </Text>
-            <TextInput
+            <TextInputWithDoneBar
               style={[
                 styles.descriptionInput,
                 { 
