@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import React from "react";
+import { Platform } from "react-native";
 
 export default function HomeLayout() {
   return (
@@ -10,8 +11,8 @@ export default function HomeLayout() {
       gestureEnabled: true,
       gestureDirection: 'horizontal',
       animation: 'slide_from_right', // Forward navigation - slide from right
-      animationDuration: 300, // Smooth slide animation
-      animationTypeForReplace: 'push',
+      animationDuration: Platform.OS === 'android' ? 250 : 300, // Faster on Android for consistency
+      animationTypeForReplace: Platform.OS === 'android' ? 'pop' : 'push', // Android-specific replace behavior
     }}>
       <Stack.Screen name="index" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
       <Stack.Screen name="dashboard" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />

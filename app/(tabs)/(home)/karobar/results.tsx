@@ -87,12 +87,12 @@ export default function KarobarResultsScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Android: Use DRAMATIC slide from bottom transition - completely different from forward slide
+    // For karobar calculator flow - go back to home page directly
     if (Platform.OS === 'android') {
-      // Use router.replace to trigger the slide_from_bottom animation set in layout
-      router.replace('/(tabs)/(home)/karobar');
+      // On Android, navigate directly to home to avoid stack issues
+      router.replace('/(tabs)/(home)');
     } else {
-      // Standard back navigation for iOS with natural slide_from_left
+      // On iOS, use standard back navigation
       router.back();
     }
   };

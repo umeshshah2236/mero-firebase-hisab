@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useMemo, useCallback, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, Animated, Platform, ScrollView, RefreshControl, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, Animated, Platform, ScrollView, RefreshControl, Alert, Modal, TextInput } from 'react-native';
 import { Stack, router, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { ArrowLeft, TrendingUp, TrendingDown, Calendar, Clock, Edit3, Trash2, MoreHorizontal, UserX } from 'lucide-react-native';
+import { ArrowLeft, TrendingUp, TrendingDown, Calendar, Clock, Edit3, Trash2, MoreHorizontal, UserX, Calculator, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -17,6 +17,8 @@ import { convertADToBS } from '@/utils/date-utils';
 import EditTransactionModal from '@/components/EditTransactionModal';
 import { NetworkStatus } from '@/components/NetworkDiagnostic';
 import { capitalizeFirstLetters, getCapitalizedFirstName } from '@/utils/string-utils';
+import DatePicker from '@/components/DatePicker';
+import { BSDate } from '@/utils/date-utils';
 
 interface TransactionEntry {
   id: string;
@@ -69,6 +71,19 @@ export default function CustomerDetailScreen() {
   const [networkError, setNetworkError] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   
+  // Interest calculation modal state
+  const [interestModalVisible, setInterestModalVisible] = useState(false);
+  const [interestRate, setInterestRate] = useState('');
+  const [endDate, setEndDate] = useState<BSDate>(() => {
+    // Default to current date in BS format
+    const currentBSDate = getAccurateCurrentBSDate();
+    return {
+      year: currentBSDate.year,
+      month: currentBSDate.month,
+      day: currentBSDate.day
+    };
+  });
+  
   // State to prevent blinking - maintain previous data while loading new data
   const [displayedTransactionEntries, setDisplayedTransactionEntries] = useState<DBTransactionEntry[]>(initialTransactions);
   // Track previous data to compare for changes
@@ -108,6 +123,138 @@ export default function CustomerDetailScreen() {
 
   console.log('Customer detail: customerName:', customerName);
   console.log('Customer detail: customerPhone:', customerPhone);
+
+  // Handle interest calculation
+  const handleCalculateInterest = useCallback(async () => {
+    if (!interestRate || !endDate) {
+      Alert.alert(t('error'), t('pleaseEnterAllFields'));
+      return;
+    }
+
+    const rate = parseFloat(interestRate);
+    if (isNaN(rate) || rate <= 0) {
+      Alert.alert(t('error'), t('pleaseEnterValidInterestRate'));
+      return;
+    }
+
+    // Close modal first
+    setInterestModalVisible(false);
+
+    try {
+      // Use require to avoid dynamic import issues
+      const { calculateCompoundInterest } = require('@/utils/interest-utils');
+      
+      // Use endDate directly as it's already in BSDate format
+      const endDateBS = {
+        year: endDate.year,
+        month: endDate.month,
+        day: endDate.day
+      };
+
+      // Get all customer transactions and separate into "given" and "received"
+      const customerTransactions = displayedTransactionEntries.filter(transaction =>
+        transaction.customer_name.toLowerCase() === customerName.toLowerCase()
+      );
+
+      const givenTransactions = customerTransactions.filter(t => t.transaction_type === 'given');
+      const receivedTransactions = customerTransactions.filter(t => t.transaction_type === 'received');
+
+      console.log('Interest calculation - Given transactions:', givenTransactions.length);
+      console.log('Interest calculation - Received transactions:', receivedTransactions.length);
+
+      // Calculate total amount due from all "given" transactions
+      let totalAmountDue = 0;
+      let earliestGivenDate: string | null = null;
+
+      givenTransactions.forEach((transaction) => {
+        // Parse transaction date (assuming BS format YYYY-MM-DD)
+        const dateParts = transaction.transaction_date.split('-');
+        const transactionDateBS = {
+          year: dateParts[0],
+          month: parseInt(dateParts[1]),
+          day: parseInt(dateParts[2])
+        };
+
+        // Calculate interest on this amount from transaction date to end date
+        const result = calculateCompoundInterest(
+          transaction.amount,
+          rate, // Monthly rate
+          transactionDateBS,
+          endDateBS
+        );
+
+        totalAmountDue += result.finalAmount;
+
+        // Track earliest date for display
+        if (!earliestGivenDate || transaction.transaction_date < earliestGivenDate) {
+          earliestGivenDate = transaction.transaction_date;
+        }
+      });
+
+      // Calculate total repayments with interest
+      let totalRepaymentWithInterest = 0;
+
+      receivedTransactions.forEach((transaction) => {
+        // Parse transaction date (assuming BS format YYYY-MM-DD)
+        const dateParts = transaction.transaction_date.split('-');
+        const transactionDateBS = {
+          year: dateParts[0],
+          month: parseInt(dateParts[1]),
+          day: parseInt(dateParts[2])
+        };
+
+        // Calculate interest on this repayment from repayment date to end date
+        const result = calculateCompoundInterest(
+          transaction.amount,
+          rate, // Monthly rate
+          transactionDateBS,
+          endDateBS
+        );
+
+        totalRepaymentWithInterest += result.finalAmount;
+      });
+
+      // Calculate net balance (like repayment calculator)
+      const netBalance = totalAmountDue - totalRepaymentWithInterest;
+
+      // Navigate to calculator results with the calculated data
+      router.push({
+        pathname: '/(tabs)/(home)/calculator/results',
+        params: {
+          // Main calculation results
+          principal: givenTransactions.reduce((sum, t) => sum + t.amount, 0).toString(),
+          totalInterest: (totalAmountDue - givenTransactions.reduce((sum, t) => sum + t.amount, 0)).toString(),
+          finalAmount: totalAmountDue.toString(),
+          
+          // Net balance results
+          netBalance: netBalance.toString(),
+          totalRepaymentAmount: receivedTransactions.reduce((sum, t) => sum + t.amount, 0).toString(),
+          totalRepaymentWithInterest: totalRepaymentWithInterest.toString(),
+          
+          // Dates for display
+          startDateYear: earliestGivenDate ? (earliestGivenDate as string).split('-')[0] : endDateBS.year.toString(),
+          startDateMonth: earliestGivenDate ? (earliestGivenDate as string).split('-')[1] : endDateBS.month.toString(),
+          startDateDay: earliestGivenDate ? (earliestGivenDate as string).split('-')[2] : endDateBS.day.toString(),
+          endDateYear: endDateBS.year.toString(),
+          endDateMonth: endDateBS.month.toString(),
+          endDateDay: endDateBS.day.toString(),
+          
+          // Rate and type
+          monthlyRate: rate.toString(),
+          calculationType: 'customer_interest',
+          customerName: customerName,
+          
+          // Transaction counts for display
+          givenTransactionCount: givenTransactions.length.toString(),
+          receivedTransactionCount: receivedTransactions.length.toString(),
+        }
+      });
+
+    } catch (error) {
+      console.error('Interest calculation error:', error);
+      Alert.alert(t('error'), t('calculationError') || 'Error calculating interest');
+    }
+  }, [interestRate, endDate, displayedTransactionEntries, customerName, t]);
 
   // Convert date to proper BS format with date and time using Nepal timezone
   const formatNepaliDateTime = React.useCallback((dateString: string, createdAtString?: string): string => {
@@ -281,6 +428,14 @@ export default function CustomerDetailScreen() {
           setDisplayedTransactionEntries(customerEntries);
           setHasFreshTransactionData(true);
           
+          // REAL-TIME CACHE UPDATE: Also update global cache for instant dashboard updates
+          (globalThis as any).__customerDetailCache = {
+            customerName: customerName,
+            transactions: customerEntries,
+            cachedAt: Date.now()
+          };
+          console.log('Customer detail: Updated global cache with fresh data');
+          
           // Check if data has actually changed for logging
           const dataChanged = hasDataChanged(customerEntries);
           if (dataChanged) {
@@ -381,21 +536,22 @@ export default function CustomerDetailScreen() {
   const [hasFreshTransactionData, setHasFreshTransactionData] = useState(true); // Start as true
 
 
-  // Track if screen is focused - OPTIMIZED: Only refresh when necessary
+  // Track if screen is focused - REAL-TIME DATA UPDATES
   useFocusEffect(
     React.useCallback(() => {
-      console.log('Customer detail: Screen focused - FAST MODE (no automatic refresh)');
+      console.log('Customer detail: Screen focused - checking for data updates');
       setIsScreenFocused(true);
       
-      // DON'T automatically refresh on focus - data is already passed from dashboard
-      // Only refresh manually via pull-to-refresh or when user adds new transaction
-      console.log('Customer detail: Using cached data for instant display');
+      // SMART REFRESH: Always refresh when coming back to screen to catch new transactions
+      // This ensures data is always current when user adds/edits transactions and comes back
+      console.log('Customer detail: Refreshing data to ensure latest transactions are shown');
+      handleBackgroundRefresh();
 
       return () => {
         console.log('Customer detail: Screen unfocused');
         setIsScreenFocused(false);
       };
-    }, []) // Removed handleBackgroundRefresh dependency for performance
+    }, [handleBackgroundRefresh]) // Include dependency for real-time updates
   );
 
 
@@ -949,7 +1105,7 @@ export default function CustomerDetailScreen() {
       />
 
       {/* Modern Professional Header */}
-      <View style={[styles.modernHeader, { paddingTop: Platform.OS === 'ios' ? insets.top + 60 : 20 }]}>
+              <View style={[styles.modernHeader, { paddingTop: Platform.OS === 'ios' ? insets.top + 60 : insets.top + 20 }]}>
         {/* Gradient Background */}
         <LinearGradient
           colors={['#1E293B', '#334155']}
@@ -988,7 +1144,7 @@ export default function CustomerDetailScreen() {
                     activeOpacity={0.8}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Edit3 size={16} color="#64748B" strokeWidth={2} />
+                    <Edit3 size={14} color="#64748B" strokeWidth={2} />
                   </TouchableOpacity>
                   
                   <TouchableOpacity
@@ -997,51 +1153,50 @@ export default function CustomerDetailScreen() {
                     activeOpacity={0.8}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <UserX size={16} color="#EF4444" strokeWidth={2} />
+                    <UserX size={14} color="#EF4444" strokeWidth={2} />
                   </TouchableOpacity>
                 </View>
               </View>
               
-              <View style={styles.customerStatusBadge}>
-                <View style={styles.statusIndicator} />
-                <Text style={styles.statusLabel}>{t('activeCustomer')}</Text>
-              </View>
+              {/* Calculate Interest Button - Below Customer Name */}
+              <TouchableOpacity 
+                style={styles.calculateInterestButtonBelowName}
+                onPress={() => {
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  }
+                  setInterestModalVisible(true);
+                }}
+                activeOpacity={0.6}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <LinearGradient
+                  colors={['#3B82F6', '#2563EB']} 
+                  style={styles.calculateInterestGradientBelowName}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Calculator size={12} color="white" strokeWidth={2} />
+                  <Text style={styles.calculateInterestTextBelowName}>{t('calculateInterest')}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+            
+            {/* Balance Display - Moved to Right Side */}
+            <View style={styles.balanceDisplaySectionRight}>
+              <Text style={[styles.balanceLabel, {
+                color: customerBalance > 0 ? '#10B981' : customerBalance < 0 ? '#EF4444' : '#64748B'
+              }]}>
+                {customerBalance > 0 ? t('toReceive') : customerBalance < 0 ? t('toGive') : t('allSettled')}
+              </Text>
+              <Text style={[styles.balanceAmount, {
+                color: customerBalance > 0 ? '#10B981' : customerBalance < 0 ? '#EF4444' : '#64748B'
+              }]}>
+                रु{Math.abs(customerBalance).toLocaleString()}
+              </Text>
             </View>
           </View>
-          
-          {/* Balance Display - Match Dashboard Color Scheme */}
-          <View style={styles.balanceDisplaySection}>
-            <Text style={styles.balanceLabel}>{t('netBalance')}</Text>
-            <Text style={[styles.balanceAmount, {
-              color: customerBalance > 0 ? '#10B981' : customerBalance < 0 ? '#EF4444' : '#64748B'
-            }]}>
-              रु{Math.abs(customerBalance).toLocaleString()}
-            </Text>
-            <View style={styles.balanceIndicator}>
-              {customerBalance > 0 ? (
-                <>
-                  <View style={[styles.balanceIcon, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                    <TrendingUp size={14} color="#10B981" strokeWidth={2.5} />
-                  </View>
-                  <Text style={[styles.balanceStatus, { color: '#10B981' }]}>{t('toReceive')}</Text>
-                </>
-              ) : customerBalance < 0 ? (
-                <>
-                  <View style={[styles.balanceIcon, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
-                    <TrendingDown size={14} color="#EF4444" strokeWidth={2.5} />
-                  </View>
-                  <Text style={[styles.balanceStatus, { color: '#EF4444' }]}>{t('toGive')}</Text>
-                </>
-              ) : (
-                <>
-                  <View style={[styles.balanceIcon, { backgroundColor: 'rgba(100, 116, 139, 0.1)' }]}>
-                    <Clock size={14} color="#64748B" strokeWidth={2.5} />
-                  </View>
-                  <Text style={[styles.balanceStatus, { color: '#64748B' }]}>{t('allSettled')}</Text>
-                </>
-              )}
-            </View>
-          </View>
+
         </View>
       </View>
 
@@ -1286,6 +1441,95 @@ export default function CustomerDetailScreen() {
           await handleBackgroundRefresh();
         }}
       />
+
+      {/* Interest Calculation Modal - Redesigned with Blue Theme */}
+      <Modal
+        visible={interestModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setInterestModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.interestModalContainer}>
+            <LinearGradient
+              colors={['#1E40AF', '#3B82F6']}
+              style={styles.modalGradientHeader}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.modalHeader}>
+                <View style={styles.modalTitleSection}>
+                  <Calculator size={20} color="white" strokeWidth={2} />
+                  <Text style={styles.modalTitle}>{t('calculateInterest')}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setInterestModalVisible(false)}
+                  style={styles.closeButton}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <X size={20} color="white" strokeWidth={2} />
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
+
+            <View style={styles.modalContent}>
+              <Text style={styles.modalDescription}>
+                {t('calculateInterestDescription') || 'Calculate interest based on customer transaction history. Principal amount and dates will be taken from transaction records.'}
+              </Text>
+
+              {/* Interest Rate Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>{t('interestRate')} (%)</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={interestRate}
+                    onChangeText={setInterestRate}
+                    placeholder={t('enterInterestRate') || '2'}
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="numeric"
+                    returnKeyType="next"
+                  />
+                </View>
+              </View>
+
+              {/* End Date Picker */}
+              <DatePicker
+                value={endDate}
+                onChange={(date) => setEndDate(date)}
+                label={t('endDate') + ' (BS)'}
+              />
+
+              {/* Action Buttons */}
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setInterestModalVisible(false)}
+                  activeOpacity={0.6}
+                >
+                  <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.calculateButton}
+                  onPress={() => handleCalculateInterest()}
+                  activeOpacity={0.6}
+                >
+                  <LinearGradient
+                    colors={['#1E40AF', '#3B82F6']}
+                    style={styles.calculateButtonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Calculator size={16} color="white" strokeWidth={2} />
+                    <Text style={styles.calculateButtonText}>{t('calculate')}</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1306,8 +1550,8 @@ const styles = StyleSheet.create({
   // Modern Header Styles
   modernHeader: {
     position: 'relative',
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
     marginTop: Platform.OS === 'ios' ? -50 : 0,
     overflow: 'hidden',
   },
@@ -1321,64 +1565,64 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 24,
   },
   modernHeaderContent: {
-    paddingTop: 16,
+    paddingTop: 8,
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 16,
+    gap: 12,
   },
   customerProfileSection: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
     flex: 1,
-    gap: 14,
   },
   avatarSection: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   modernAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 3,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 1,
     },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    borderWidth: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   modernAvatarText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#1E293B',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   customerInfo: {
     flex: 1,
-    gap: 6,
+    gap: 2,
   },
   nameAndActions: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    gap: 8,
-    justifyContent: 'space-between',
+    gap: 3,
   },
   customerNameText: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: '700',
     color: 'white',
     letterSpacing: 0.3,
-    flex: 1,
-    flexShrink: 1,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   androidResponsiveName: {
     // Android-specific responsive styling
@@ -1389,13 +1633,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexShrink: 0, // Prevent buttons from shrinking
-    marginLeft: 'auto', // Push buttons to the right
   },
   modernActionButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1438,27 +1680,38 @@ const styles = StyleSheet.create({
     minWidth: 120,
   },
   balanceLabel: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
     letterSpacing: 0.3,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    textAlign: 'right',
   },
   balanceAmount: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
-    color: 'white',
     letterSpacing: 0.5,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    textAlign: 'right',
   },
   balanceIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   balanceIcon: {
     width: 20,
@@ -1852,5 +2105,200 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
+  // Bottom row containing both Calculate Interest Button and Balance Display
+  bottomButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+
+  // Calculate Interest Button Styles
+  calculateInterestButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#3B82F6', // Updated shadow color to match blue
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    // Removed alignSelf since we're now in a row layout
+  },
+  calculateInterestGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  calculateInterestText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'white',
+    letterSpacing: 0.3,
+  },
+  
+  // Calculate Interest Button Below Name Styles
+  calculateInterestButtonBelowName: {
+    borderRadius: 8,
+    overflow: 'hidden',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+  },
+  calculateInterestGradientBelowName: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 5,
+  },
+  calculateInterestTextBelowName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'white',
+    letterSpacing: 0.2,
+  },
+  
+  // Balance Display Section Right
+  balanceDisplaySectionRight: {
+    alignItems: 'flex-end',
+    gap: 2,
+    minWidth: 100,
+  },
+
+  // Interest Modal Styles - Compact Blue Theme
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  interestModalContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 360,
+    overflow: 'hidden',
+    shadowColor: '#1E40AF',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  modalGradientHeader: {
+    padding: 0,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  modalTitleSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: 'white',
+  },
+  closeButton: {
+    padding: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  modalContent: {
+    padding: 20,
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 16,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1E40AF',
+    marginBottom: 6,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#DBEAFE',
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1E293B',
+    minHeight: 24,
+    fontWeight: '600',
+  },
+  inputIcon: {
+    marginLeft: 10,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  calculateButton: {
+    flex: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+    shadowColor: '#1E40AF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  calculateButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  calculateButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: 'white',
+  },
 
 });

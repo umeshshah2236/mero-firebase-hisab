@@ -37,31 +37,43 @@ export default React.memo(function ResultsScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   
-  // Parse parameters
-  const principal = parseFloat(params.principal as string);
-  const totalInterest = parseFloat(params.totalInterest as string);
-  const finalAmount = parseFloat(params.finalAmount as string);
-  const years = parseInt(params.years as string);
-  const months = parseInt(params.months as string);
-  const days = parseInt(params.days as string);
-  const totalDays = parseInt(params.totalDays as string);
-  const yearlyInterest = parseFloat(params.yearlyInterest as string);
-  const monthlyInterest = parseFloat(params.monthlyInterest as string);
-  const dailyInterest = parseFloat(params.dailyInterest as string);
-  const monthlyRate = parseFloat(params.monthlyRate as string);
+  // Parse parameters with safe defaults
+  const principal = parseFloat(params.principal as string) || 0;
+  const totalInterest = parseFloat(params.totalInterest as string) || 0;
+  const finalAmount = parseFloat(params.finalAmount as string) || 0;
+  const years = parseInt(params.years as string) || 0;
+  const months = parseInt(params.months as string) || 0;
+  const days = parseInt(params.days as string) || 0;
+  const totalDays = parseInt(params.totalDays as string) || 0;
+  const yearlyInterest = parseFloat(params.yearlyInterest as string) || 0;
+  const monthlyInterest = parseFloat(params.monthlyInterest as string) || 0;
+  const dailyInterest = parseFloat(params.dailyInterest as string) || 0;
+  const monthlyRate = parseFloat(params.monthlyRate as string) || 0;
   
-  // Parse date parameters
+  // Parse date parameters with safe defaults
   const startDate = {
-    year: params.startDateYear as string,
-    month: parseInt(params.startDateMonth as string),
-    day: parseInt(params.startDateDay as string),
+    year: params.startDateYear as string || '',
+    month: parseInt(params.startDateMonth as string) || 1,
+    day: parseInt(params.startDateDay as string) || 1,
   };
   
   const endDate = {
-    year: params.endDateYear as string,
-    month: parseInt(params.endDateMonth as string),
-    day: parseInt(params.endDateDay as string),
+    year: params.endDateYear as string || '',
+    month: parseInt(params.endDateMonth as string) || 1,
+    day: parseInt(params.endDateDay as string) || 1,
   };
+
+  // Check if this is a customer interest calculation
+  const calculationType = params.calculationType as string;
+  const customerName = params.customerName as string;
+  const isCustomerInterest = calculationType === 'customer_interest';
+  
+  // Customer interest specific parameters
+  const netBalance = parseFloat(params.netBalance as string) || 0;
+  const totalRepaymentAmount = parseFloat(params.totalRepaymentAmount as string) || 0;
+  const totalRepaymentWithInterest = parseFloat(params.totalRepaymentWithInterest as string) || 0;
+  const givenTransactionCount = parseInt(params.givenTransactionCount as string) || 0;
+  const receivedTransactionCount = parseInt(params.receivedTransactionCount as string) || 0;
 
   const formatTimePeriod = () => {
     const parts = [];
@@ -94,12 +106,47 @@ export default React.memo(function ResultsScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Android: Use DRAMATIC slide from bottom transition - completely different from forward slide
+    // If this is a customer interest calculation, go back to customer detail page
+    if (isCustomerInterest && customerName) {
+      if (Platform.OS === 'android') {
+        // For Android: Clear calculator stack and navigate to customer detail for clean navigation
+        router.dismissAll();
+        // Small delay to ensure dismissAll completes before navigation
+        setTimeout(() => {
+          router.push({
+            pathname: '/(tabs)/(home)/customer-detail',
+            params: { customerName }
+          });
+        }, 50);
+      } else {
+        // For iOS: Simple navigation works fine
+        router.push({
+          pathname: '/(tabs)/(home)/customer-detail',
+          params: { customerName }
+        });
+      }
+      return;
+    }
+    
+    // For regular calculator flow - Android: go back to calculator with pre-filled data
     if (Platform.OS === 'android') {
-      // Use router.replace to trigger the slide_from_bottom animation set in layout
-      router.replace('/(tabs)/(home)/calculator');
+      // On Android, go back to calculator with the data used for calculation
+      router.replace({
+        pathname: '/(tabs)/(home)/calculator',
+        params: {
+          principal: principal.toString(),
+          monthlyRate: monthlyRate.toString(),
+          startDateYear: startDate.year,
+          startDateMonth: startDate.month.toString(),
+          startDateDay: startDate.day.toString(),
+          endDateYear: endDate.year,
+          endDateMonth: endDate.month.toString(),
+          endDateDay: endDate.day.toString(),
+          fromResults: 'true' // Flag to indicate this came from results
+        }
+      });
     } else {
-      // Standard back navigation for iOS with natural slide_from_left
+      // On iOS, use standard back navigation
       router.back();
     }
   };
@@ -221,14 +268,16 @@ export default React.memo(function ResultsScreen() {
         </TouchableOpacity>
         <View style={styles.headerTextContainer}>
           <Text style={[styles.simpleHeaderTitle, {
-            fontSize: getResponsiveSize(22, 24, 26),
+            fontSize: getResponsiveSize(18, 20, 22),
+            fontWeight: '600',
           }]}>
             {t('calculationResults')}
           </Text>
           <Text style={[styles.simpleHeaderSubtitle, {
-            fontSize: getResponsiveSize(16, 18, 20),
+            fontSize: getResponsiveSize(14, 16, 16),
+            fontWeight: '500',
           }]}>
-            {formatTimePeriod()}
+            {isCustomerInterest ? customerName : formatTimePeriod()}
           </Text>
         </View>
       </View>
@@ -243,52 +292,214 @@ export default React.memo(function ResultsScreen() {
           paddingTop: getCompactSpacing(8, 12, 16),
           backgroundColor: theme.colors.background || '#F8FAFC',
         }]}>
-          {/* Total Interest - Highlighted - MOVED TO TOP */}
-          <View style={[styles.highlightCard, {
-            marginBottom: getCompactSpacing(10, 12, 14),
-            paddingVertical: getCompactSpacing(18, 22, 26),
-            paddingHorizontal: getCompactSpacing(18, 22, 26),
-          }]}>
-            <Text style={[styles.highlightCardTitle, {
-              fontSize: getResponsiveSize(20, 22, 24),
-              marginBottom: getCompactSpacing(8, 10, 12),
-            }]}>{t('totalInterest')}</Text>
-            <Text style={[styles.highlightCardValue, {
-              fontSize: getResponsiveSize(28, 30, 32),
-            }]}>
-              {formatLocalizedCurrency(totalInterest, 'en')}
-            </Text>
-          </View>
+          {isCustomerInterest ? (
+            /* Customer Interest Calculation Results */
+            <>
+              {/* Net Balance - Compact Design */}
+              <View style={[styles.compactBalanceCard, {
+                marginBottom: getCompactSpacing(8, 10, 12),
+                paddingVertical: getCompactSpacing(12, 14, 16),
+                paddingHorizontal: getCompactSpacing(16, 18, 20),
+                backgroundColor: netBalance >= 0 ? '#10B981' : '#EF4444',
+              }]}>
+                <Text style={[styles.compactBalanceTitle, {
+                  fontSize: getResponsiveSize(14, 16, 16),
+                  marginBottom: getCompactSpacing(4, 6, 8),
+                  color: 'white',
+                  fontWeight: '600',
+                }]}>
+                  {netBalance >= 0 ? t('toReceive') : t('toGive')}
+                </Text>
+                <Text style={[styles.compactBalanceValue, {
+                  fontSize: getResponsiveSize(20, 22, 24),
+                  color: 'white',
+                  fontWeight: '700',
+                }]}>
+                  {formatLocalizedCurrency(Math.abs(netBalance), 'en')}
+                </Text>
+              </View>
+
+              {/* Transaction Summary */}
+              <View style={[styles.largeInfoCard, {
+                marginBottom: getCompactSpacing(12, 16, 20),
+                paddingVertical: getCompactSpacing(16, 20, 24),
+                paddingHorizontal: getCompactSpacing(16, 20, 24),
+              }]}>
+                <Text style={[styles.cardTitle, {
+                  fontSize: getResponsiveSize(16, 18, 18),
+                  marginBottom: getCompactSpacing(12, 16, 20),
+                  textAlign: 'center',
+                  fontWeight: '600',
+                }]}>{t('transactionSummary')}</Text>
+                
+                {/* Explanation Text */}
+                <Text style={[styles.explanationText, {
+                  fontSize: getResponsiveSize(12, 13, 14),
+                  color: '#64748B',
+                  textAlign: 'center',
+                  marginBottom: getCompactSpacing(12, 14, 16),
+                  fontWeight: '500',
+                }]}>
+                  {t('calculationBreakdownExplanation') || 'Here is the detailed breakdown of all transactions and calculated interest:'}
+                </Text>
+                
+                <View style={styles.responsiveTransactionRow}>
+                  <Text style={[styles.responsiveTransactionLabel, {
+                    fontSize: getResponsiveSize(13, 14, 15),
+                    fontWeight: '600',
+                  }]}>
+                    {t('totalGiven')} ({givenTransactionCount} {t('transactionCount')})
+                  </Text>
+                  <Text style={[styles.responsiveTransactionValue, {
+                    fontSize: getResponsiveSize(14, 15, 16),
+                    fontWeight: '700',
+                  }]}>
+                    {formatLocalizedCurrency(principal, 'en')}
+                  </Text>
+                </View>
+                
+                <View style={styles.responsiveTransactionRow}>
+                  <Text style={[styles.responsiveTransactionLabel, {
+                    fontSize: getResponsiveSize(13, 14, 15),
+                    fontWeight: '600',
+                  }]}>
+                    {t('totalReceived')} ({receivedTransactionCount} {t('transactionCount')})
+                  </Text>
+                  <Text style={[styles.responsiveTransactionValue, {
+                    fontSize: getResponsiveSize(14, 15, 16),
+                    fontWeight: '700',
+                  }]}>
+                    {formatLocalizedCurrency(totalRepaymentAmount, 'en')}
+                  </Text>
+                </View>
+                
+                <View style={{ borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 12, marginTop: 12 }}>
+                  <Text style={[styles.explanationText, {
+                    fontSize: getResponsiveSize(12, 13, 13),
+                    color: '#64748B',
+                    textAlign: 'center',
+                    marginBottom: getCompactSpacing(8, 10, 12),
+                    fontWeight: '500',
+                    fontStyle: 'italic',
+                  }]}>
+                    {t('withInterestCalculation') || 'After adding interest calculations:'}
+                  </Text>
+                  
+                  <View style={styles.responsiveTransactionRow}>
+                    <Text style={[styles.responsiveTransactionLabel, {
+                      fontSize: getResponsiveSize(13, 14, 15),
+                      fontWeight: '600',
+                    }]}>
+                      {t('totalAmountDueWithInterest')}
+                    </Text>
+                    <Text style={[styles.responsiveTransactionValue, {
+                      fontSize: getResponsiveSize(14, 15, 16),
+                      fontWeight: '700',
+                      color: '#EF4444',
+                    }]}>
+                      {formatLocalizedCurrency(finalAmount, 'en')}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.responsiveTransactionRow}>
+                    <Text style={[styles.responsiveTransactionLabel, {
+                      fontSize: getResponsiveSize(13, 14, 15),
+                      fontWeight: '600',
+                    }]}>
+                      {t('totalRepaidWithInterest')}
+                    </Text>
+                    <Text style={[styles.responsiveTransactionValue, {
+                      fontSize: getResponsiveSize(14, 15, 16),
+                      fontWeight: '700',
+                      color: '#10B981',
+                    }]}>
+                      {formatLocalizedCurrency(totalRepaymentWithInterest, 'en')}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </>
+          ) : (
+            /* Regular Interest Calculation Results */
+            <>
+              {/* Explanation for regular calculation */}
+              <Text style={[styles.explanationText, {
+                fontSize: getResponsiveSize(12, 13, 14),
+                color: '#64748B',
+                textAlign: 'center',
+                marginBottom: getCompactSpacing(12, 14, 16),
+                fontWeight: '500',
+                paddingHorizontal: getCompactSpacing(16, 20, 24),
+              }]}>
+                {t('simpleInterestExplanation') || 'Simple interest calculation for the specified time period:'}
+              </Text>
+              
+              {/* Total Interest - Highlighted - MOVED TO TOP */}
+              <View style={[styles.highlightCard, {
+                marginBottom: getCompactSpacing(10, 12, 14),
+                paddingVertical: getCompactSpacing(18, 22, 26),
+                paddingHorizontal: getCompactSpacing(18, 22, 26),
+              }]}>
+                <Text style={[styles.highlightCardTitle, {
+                  fontSize: getResponsiveSize(16, 18, 18),
+                  marginBottom: getCompactSpacing(8, 10, 12),
+                  fontWeight: '600',
+                }]}>{t('totalInterest')}</Text>
+                <Text style={[styles.highlightCardValue, {
+                  fontSize: getResponsiveSize(24, 26, 28),
+                  fontWeight: '700',
+                }]}>
+                  {formatLocalizedCurrency(totalInterest, 'en')}
+                </Text>
+              </View>
+              
+              {/* Final Amount - Most Important - MOVED TO TOP */}
+              <View style={[styles.finalAmountCard, {
+                marginBottom: getCompactSpacing(12, 16, 20),
+                paddingVertical: getCompactSpacing(20, 24, 28),
+                paddingHorizontal: getCompactSpacing(20, 24, 28),
+              }]}>
+                <Text style={[styles.finalAmountTitle, {
+                  fontSize: getResponsiveSize(18, 20, 22),
+                  marginBottom: getCompactSpacing(10, 12, 16),
+                  fontWeight: '600',
+                }]}>{t('finalAmount')}</Text>
+                <Text style={[styles.finalAmountValue, {
+                  fontSize: getResponsiveSize(28, 30, 32),
+                  fontWeight: '700',
+                }]}>
+                  {formatLocalizedCurrency(finalAmount, 'en')}
+                </Text>
+                
+                {/* Calculation Formula */}
+                <Text style={[styles.explanationText, {
+                  fontSize: getResponsiveSize(10, 11, 12),
+                  color: 'rgba(255, 255, 255, 0.8)',
+                  textAlign: 'center',
+                  marginTop: getCompactSpacing(8, 10, 12),
+                  fontWeight: '500',
+                  lineHeight: 16,
+                }]}>
+                  {formatLocalizedCurrency(principal, 'en')} + {formatLocalizedCurrency(totalInterest, 'en')} = {formatLocalizedCurrency(finalAmount, 'en')}
+                </Text>
+              </View>
+            </>
+          )}
           
-          {/* Final Amount - Most Important - MOVED TO TOP */}
-          <View style={[styles.finalAmountCard, {
-            marginBottom: getCompactSpacing(12, 16, 20),
-            paddingVertical: getCompactSpacing(20, 24, 28),
-            paddingHorizontal: getCompactSpacing(20, 24, 28),
-          }]}>
-            <Text style={[styles.finalAmountTitle, {
-              fontSize: getResponsiveSize(22, 24, 26),
-              marginBottom: getCompactSpacing(10, 12, 16),
-            }]}>{t('finalAmount')}</Text>
-            <Text style={[styles.finalAmountValue, {
-              fontSize: getResponsiveSize(32, 34, 36),
-            }]}>
-              {formatLocalizedCurrency(finalAmount, 'en')}
-            </Text>
-          </View>
-          
-          {/* Calculation Breakdown Section */}
-          <View style={[styles.breakdownSectionContainer, {
-            marginBottom: getCompactSpacing(12, 16, 20),
-          }]}>
-            <View style={styles.breakdownLine} />
-            <Text style={[styles.breakdownSectionTitle, {
-              fontSize: getResponsiveSize(18, 20, 22),
-            }]}>
-              {t('calculationBreakdown')}
-            </Text>
-            <View style={styles.breakdownLine} />
-          </View>
+          {/* Calculation Breakdown Section - Only for regular calculations */}
+          {!isCustomerInterest && (
+            <>
+              <View style={[styles.breakdownSectionContainer, {
+                marginBottom: getCompactSpacing(12, 16, 20),
+              }]}>
+                <View style={styles.breakdownLine} />
+                <Text style={[styles.breakdownSectionTitle, {
+                  fontSize: getResponsiveSize(18, 20, 22),
+                }]}>
+                  {t('calculationBreakdown')}
+                </Text>
+                <View style={styles.breakdownLine} />
+              </View>
           
           {/* Principal Amount */}
           <View style={[styles.largeInfoCard, {
@@ -405,6 +616,8 @@ export default React.memo(function ResultsScreen() {
               {days > 0 && `, ${t('simpleDailyInterestFor')} ${formatNumber(days, 'en')} ${days === 1 ? t('day') : t('days')}`}.
             </Text>
           </View>
+            </>
+          )}
           
           {/* Back Button */}
           <TouchableOpacity style={[styles.backButton, {
@@ -664,6 +877,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  explanationText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   breakdownSectionContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -684,5 +903,45 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
+  },
+  responsiveTransactionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingVertical: 4,
+  },
+  responsiveTransactionLabel: {
+    flex: 1,
+    marginRight: 12,
+    color: '#64748B',
+    lineHeight: 18,
+    flexWrap: 'wrap',
+  },
+  responsiveTransactionValue: {
+    color: '#1E40AF',
+    textAlign: 'right',
+    flexShrink: 0,
+    minWidth: 80,
+    maxWidth: '40%',
+    lineHeight: 18,
+  },
+  compactBalanceCard: {
+    borderRadius: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  compactBalanceTitle: {
+    textAlign: 'center',
+    color: 'white',
+    fontWeight: '600',
+  },
+  compactBalanceValue: {
+    textAlign: 'center',
+    color: 'white',
+    fontWeight: '700',
   },
 });

@@ -20,6 +20,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   const scaleAnim = useRef(new Animated.Value(0.3)).current;
   const popAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const exitFadeAnim = useRef(new Animated.Value(1)).current;
   
   // Floating particles animation values
   const particle1 = useRef(new Animated.Value(0)).current;
@@ -54,58 +55,65 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
       createFloatingAnimation(particle3, 1000).start();
       createFloatingAnimation(particle4, 1500).start();
 
-      // Logo entrance animation - Pop up effect
+      // Logo entrance animation - Enhanced pop up effect with longer duration
       Animated.sequence([
         Animated.parallel([
           Animated.timing(fadeAnim, {
             toValue: 1,
-            duration: 800,
+            duration: 1200, // Slightly longer fade in
             useNativeDriver: true,
           }),
           Animated.spring(scaleAnim, {
             toValue: 1.2,
-            tension: 100,
+            tension: 80, // Slightly softer spring
             friction: 8,
             useNativeDriver: true,
           }),
         ]),
-        // Pop back to normal size
+        // Pop back to normal size with smoother animation
         Animated.spring(scaleAnim, {
           toValue: 1,
-          tension: 150,
-          friction: 10,
+          tension: 120,
+          friction: 12, // Smoother settle
           useNativeDriver: true,
         }),
       ]).start();
 
-      // Gentle pulsing effect after pop-in
+      // Enhanced gentle pulsing effect after pop-in - slower and more elegant
       setTimeout(() => {
         Animated.loop(
           Animated.sequence([
             Animated.timing(pulseAnim, {
-              toValue: 1.05,
-              duration: 1500,
+              toValue: 1.08, // Slightly more pronounced pulse
+              duration: 2000, // Slower, more elegant pulsing
               useNativeDriver: true,
             }),
             Animated.timing(pulseAnim, {
               toValue: 1,
-              duration: 1500,
+              duration: 2000,
               useNativeDriver: true,
             }),
           ])
         ).start();
-      }, 1000);
+      }, 1200); // Start pulsing slightly later
 
-      // Auto finish after 2.5 seconds (faster loading)
+      // Extended duration for better loading experience - start fade out after 4.5 seconds
       setTimeout(() => {
-        onFinish();
-      }, 2500);
+        // Smooth fade out animation before finishing
+        Animated.timing(exitFadeAnim, {
+          toValue: 0,
+          duration: 1000, // 1 second fade out
+          useNativeDriver: true,
+        }).start(() => {
+          onFinish();
+        });
+      }, 4500);
       
       // Fallback timeout to ensure splash never gets stuck
       setTimeout(() => {
         console.warn('Splash screen fallback timeout, forcing finish');
         onFinish();
-      }, 4000);
+      }, 7000);
     };
 
     startAnimations();
@@ -128,7 +136,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   };
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: exitFadeAnim }]}>
       {/* Animated gradient background */}
       <LinearGradient
         colors={[
@@ -232,7 +240,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
           <View style={styles.borderRing} />
         </Animated.View>
       </LinearGradient>
-    </View>
+    </Animated.View>
   );
 }
 

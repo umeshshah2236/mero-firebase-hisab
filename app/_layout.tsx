@@ -162,6 +162,7 @@ function UserSyncProvider({ children }: { children: React.ReactNode }) {
 export default function RootLayout() {
   const [isAppReady, setIsAppReady] = useState(false);
   const [showCustomSplash, setShowCustomSplash] = useState(true);
+  const [splashFinished, setSplashFinished] = useState(false);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -170,16 +171,11 @@ export default function RootLayout() {
         
         // iOS-specific initialization delay to prevent crashes
         if (Platform.OS === 'ios') {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
         
-        // Test Firebase connection with shorter timeout and don't block app loading
-        Promise.race([
-          testFirebaseConnectionDetailed(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Connection test timeout')), 3000)
-          )
-        ]).then((connectionResult: any) => {
+        // Test Firebase connection in background without blocking
+        testFirebaseConnectionDetailed().then((connectionResult: any) => {
           if (!connectionResult.success) {
             console.warn('Firebase connection test failed:', connectionResult.error);
             console.warn('App may have limited functionality');
@@ -187,36 +183,31 @@ export default function RootLayout() {
             console.log('Firebase connection test successful');
           }
         }).catch((error) => {
-          console.warn('Firebase connection test timed out or failed:', error);
+          console.warn('Firebase connection test failed:', error);
           console.warn('App will continue with limited functionality');
         });
         
+        // Hide native splash immediately since we're using custom splash
+        SplashScreen.hideAsync();
+        
       } catch (error) {
         console.error('Error during app initialization:', error);
-      } finally {
-        // Always set app as ready regardless of Firebase connection
-        setIsAppReady(true);
         SplashScreen.hideAsync();
       }
     };
 
-    // Add timeout to ensure app loads even if initialization fails
-    const initTimeout = setTimeout(() => {
-      console.warn('App initialization timeout, forcing app to load');
-      setIsAppReady(true);
-      SplashScreen.hideAsync();
-    }, 5000);
-
-    initializeApp().finally(() => {
-      clearTimeout(initTimeout);
-    });
+    initializeApp();
   }, []);
 
   const handleSplashFinish = () => {
+    // Ensure app is ready before allowing splash to finish
+    setIsAppReady(true);
+    setSplashFinished(true);
     setShowCustomSplash(false);
   };
 
-  if (!isAppReady || showCustomSplash) {
+  // Show splash screen until both conditions are met
+  if (showCustomSplash || !splashFinished) {
     return <CustomSplashScreen onFinish={handleSplashFinish} />;
   }
 
@@ -236,7 +227,7 @@ export default function RootLayout() {
                           <CustomersProvider>
                             <TransactionEntriesProvider>
                               <UserSyncProvider>
-                                <GestureHandlerRootView style={{ flex: 1 }}>
+                                <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#1a1a2e' }}>
                                   <RootLayoutNav />
                                 </GestureHandlerRootView>
                               </UserSyncProvider>
