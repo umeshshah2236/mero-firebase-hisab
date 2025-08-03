@@ -104,6 +104,11 @@ export default function SettingsScreen() {
             onPress: async () => {
               setIsSigningOut(true);
               try {
+                // Add haptic feedback for sign out action
+                if (Platform.OS !== 'web') {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                }
+                
                 await signOut();
                 console.log('Sign out completed');
               } catch (error) {

@@ -47,7 +47,19 @@ export default function CustomerDetailScreen() {
     
   const customerName = params.customerName as string || 'Customer';
   const customerPhone = params.customerPhone as string || '';
-  const initialTransactions = params.transactions ? JSON.parse(params.transactions as string) : [];
+  
+  // SUPER FAST: Use global cache instead of slow JSON parsing from params
+  const getCachedTransactions = () => {
+    const cache = (globalThis as any).__customerDetailCache;
+    if (cache && cache.customerName === customerName && cache.transactions) {
+      console.log('Customer detail: Using FAST global cache for transactions');
+      return cache.transactions;
+    }
+    // Fallback to params if cache not available (shouldn't happen with new approach)
+    return params.transactions ? JSON.parse(params.transactions as string) : [];
+  };
+  
+  const initialTransactions = getCachedTransactions();
 
   // Edit modal state
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -369,20 +381,21 @@ export default function CustomerDetailScreen() {
   const [hasFreshTransactionData, setHasFreshTransactionData] = useState(true); // Start as true
 
 
-  // Track if screen is focused and refresh transaction data
+  // Track if screen is focused - OPTIMIZED: Only refresh when necessary
   useFocusEffect(
     React.useCallback(() => {
-      console.log('Customer detail: Screen focused, starting background refresh.');
+      console.log('Customer detail: Screen focused - FAST MODE (no automatic refresh)');
       setIsScreenFocused(true);
       
-      // Perform a background refresh to get the latest data, but don't block the UI
-      handleBackgroundRefresh();
+      // DON'T automatically refresh on focus - data is already passed from dashboard
+      // Only refresh manually via pull-to-refresh or when user adds new transaction
+      console.log('Customer detail: Using cached data for instant display');
 
       return () => {
         console.log('Customer detail: Screen unfocused');
         setIsScreenFocused(false);
       };
-    }, [handleBackgroundRefresh])
+    }, []) // Removed handleBackgroundRefresh dependency for performance
   );
 
 
@@ -391,15 +404,14 @@ export default function CustomerDetailScreen() {
 
 
 
-  // Get customer transactions and calculate running balance
+  // Get customer transactions and calculate running balance - OPTIMIZED
   const customerTransactions = useMemo(() => {
-    console.log('Customer detail: Calculating customer transactions');
+    console.log('Customer detail: FAST calculation of customer transactions');
     console.log('Displayed transaction entries:', displayedTransactionEntries.length);
-    console.log('Has fresh transaction data:', hasFreshTransactionData);
     
-    // Don't show data if we don't have fresh transaction data (like dashboard)
-    if (!hasFreshTransactionData && displayedTransactionEntries.length > 0) {
-      console.log('Customer detail: No fresh transaction data available, showing empty list to prevent flicker');
+    // FAST MODE: Always show data if available (no waiting for fresh data flag)
+    if (displayedTransactionEntries.length === 0) {
+      console.log('Customer detail: No transaction data available');
       return [];
     }
     
@@ -457,7 +469,10 @@ export default function CustomerDetailScreen() {
     });
   }, [displayedTransactionEntries, customerName, formatNepaliDateTime]);
 
-  // Group transactions by date
+  // Cache for expensive date conversions
+  const dateConversionCache = useRef(new Map<string, string>()).current;
+  
+  // Group transactions by date - OPTIMIZED with caching
   const groupedTransactions = useMemo(() => {
     const groups: DayGroup[] = [];
     const dateGroups = new Map<string, TransactionEntry[]>();
@@ -470,12 +485,21 @@ export default function CustomerDetailScreen() {
         
         if (transactionEntry?.created_at) {
           groupingDate = new Date(transactionEntry.created_at);
-          // Convert to BS date for proper grouping
-          const bsDate = convertADToBS(groupingDate);
-          if (bsDate) {
-            dateKey = `${bsDate.year}-${bsDate.month.toString().padStart(2, '0')}-${bsDate.day.toString().padStart(2, '0')}`;
+          const adDateKey = groupingDate.toISOString().split('T')[0];
+          
+          // Check cache first for expensive BS conversion
+          if (dateConversionCache.has(adDateKey)) {
+            dateKey = dateConversionCache.get(adDateKey)!;
           } else {
-            dateKey = groupingDate.toISOString().split('T')[0];
+            // Convert to BS date for proper grouping (expensive operation)
+            const bsDate = convertADToBS(groupingDate);
+            if (bsDate) {
+              dateKey = `${bsDate.year}-${bsDate.month.toString().padStart(2, '0')}-${bsDate.day.toString().padStart(2, '0')}`;
+            } else {
+              dateKey = adDateKey;
+            }
+            // Cache the result
+            dateConversionCache.set(adDateKey, dateKey);
           }
         } else {
           // Fallback: try to parse the transaction date
@@ -485,11 +509,20 @@ export default function CustomerDetailScreen() {
             groupingDate = new Date(); // Use current date for display purposes
           } else {
             groupingDate = new Date(transaction.date);
-            const bsDate = convertADToBS(groupingDate);
-            if (bsDate) {
-              dateKey = `${bsDate.year}-${bsDate.month.toString().padStart(2, '0')}-${bsDate.day.toString().padStart(2, '0')}`;
+            const adDateKey = groupingDate.toISOString().split('T')[0];
+            
+            // Check cache first
+            if (dateConversionCache.has(adDateKey)) {
+              dateKey = dateConversionCache.get(adDateKey)!;
             } else {
-              dateKey = groupingDate.toISOString().split('T')[0];
+              const bsDate = convertADToBS(groupingDate);
+              if (bsDate) {
+                dateKey = `${bsDate.year}-${bsDate.month.toString().padStart(2, '0')}-${bsDate.day.toString().padStart(2, '0')}`;
+              } else {
+                dateKey = adDateKey;
+              }
+              // Cache the result
+              dateConversionCache.set(adDateKey, dateKey);
             }
           }
         }
@@ -976,33 +1009,35 @@ export default function CustomerDetailScreen() {
             </View>
           </View>
           
-          {/* Balance Display - Always show like dashboard */}
+          {/* Balance Display - Match Dashboard Color Scheme */}
           <View style={styles.balanceDisplaySection}>
             <Text style={styles.balanceLabel}>{t('netBalance')}</Text>
-            <Text style={styles.balanceAmount}>
+            <Text style={[styles.balanceAmount, {
+              color: customerBalance > 0 ? '#10B981' : customerBalance < 0 ? '#EF4444' : '#64748B'
+            }]}>
               रु{Math.abs(customerBalance).toLocaleString()}
             </Text>
             <View style={styles.balanceIndicator}>
               {customerBalance > 0 ? (
                 <>
-                  <View style={[styles.balanceIcon, { backgroundColor: '#DCFCE7' }]}>
-                    <TrendingUp size={14} color="#059669" strokeWidth={2.5} />
+                  <View style={[styles.balanceIcon, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
+                    <TrendingUp size={14} color="#10B981" strokeWidth={2.5} />
                   </View>
-                  <Text style={[styles.balanceStatus, { color: '#059669' }]}>{t('toReceive')}</Text>
+                  <Text style={[styles.balanceStatus, { color: '#10B981' }]}>{t('toReceive')}</Text>
                 </>
               ) : customerBalance < 0 ? (
                 <>
-                  <View style={[styles.balanceIcon, { backgroundColor: '#FEE2E2' }]}>
-                    <TrendingDown size={14} color="#DC2626" strokeWidth={2.5} />
+                  <View style={[styles.balanceIcon, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                    <TrendingDown size={14} color="#EF4444" strokeWidth={2.5} />
                   </View>
-                  <Text style={[styles.balanceStatus, { color: '#DC2626' }]}>{t('toGive')}</Text>
+                  <Text style={[styles.balanceStatus, { color: '#EF4444' }]}>{t('toGive')}</Text>
                 </>
               ) : (
                 <>
-                  <View style={[styles.balanceIcon, { backgroundColor: '#F3F4F6' }]}>
-                    <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: '#9CA3AF' }} />
+                  <View style={[styles.balanceIcon, { backgroundColor: 'rgba(100, 116, 139, 0.1)' }]}>
+                    <Clock size={14} color="#64748B" strokeWidth={2.5} />
                   </View>
-                  <Text style={[styles.balanceStatus, { color: '#6B7280' }]}>Settled</Text>
+                  <Text style={[styles.balanceStatus, { color: '#64748B' }]}>{t('allSettled')}</Text>
                 </>
               )}
             </View>

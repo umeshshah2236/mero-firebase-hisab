@@ -94,13 +94,13 @@ export default React.memo(function ResultsScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Android-specific fix: Use replace to avoid white flash
+    // Android: Use DRAMATIC slide from bottom transition - completely different from forward slide
     if (Platform.OS === 'android') {
+      // Use router.replace to trigger the slide_from_bottom animation set in layout
       router.replace('/(tabs)/(home)/calculator');
     } else {
-      setTimeout(() => {
-        router.back();
-      }, 100);
+      // Standard back navigation for iOS with natural slide_from_left
+      router.back();
     }
   };
 

@@ -51,15 +51,17 @@ export default React.memo(function CalculatorScreen() {
     }
   }, [isAuthenticated]);
 
-  // Keep screen active for smooth transitions on Android
+  // Keep screen active for smooth transitions - especially important for Android
   useFocusEffect(
     React.useCallback(() => {
-      // This keeps the screen rendered and prevents white flash
-      console.log('Calculator screen focused - maintaining state');
+      // This keeps the screen rendered and prevents white flash during navigation
+      console.log('Calculator screen focused - maintaining state for smooth transitions');
       return () => {
-        // Don't cleanup state on Android to prevent white flash
-        if (Platform.OS !== 'android') {
-          console.log('Calculator screen unfocused');
+        // Keep state alive longer on Android to prevent white flash during back navigation
+        if (Platform.OS === 'android') {
+          console.log('Calculator screen unfocused on Android - preserving state');
+        } else {
+          console.log('Calculator screen unfocused on iOS');
         }
       };
     }, [])

@@ -4,6 +4,8 @@ import { Platform } from 'react-native';
 import { auth, testFirebaseConnectionDetailed, firestoreHelpers } from '@/lib/firebase';
 import { User as FirebaseUser } from 'firebase/auth';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sendOtpViaSMS, verifyOtpLocal, clearExpiredOTPs } from '@/utils/aakash-sms';
 
 export interface User {
   id: string;
@@ -79,9 +81,9 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
         
         // Only show name input modal if we're sure this is a connection issue, not an existing user
         // Test if the error is network-related
-        const isNetworkError = profileError.toString().includes('network') || 
-                              profileError.toString().includes('offline') ||
-                              profileError.toString().includes('connection');
+                const isNetworkError = (profileError instanceof Error ? profileError.message : String(profileError)).includes('network') ||
+                               (profileError instanceof Error ? profileError.message : String(profileError)).includes('offline') ||
+                               (profileError instanceof Error ? profileError.message : String(profileError)).includes('connection');
         
         if (isNetworkError) {
           console.log('Network error during profile loading, skipping name input modal for existing user');
@@ -294,14 +296,27 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
         return { success: false, error: `Connection failed: ${connectionTest.error}` };
       }
 
-      console.log('Connection test passed, sending OTP to:', cleanPhone);
+      console.log('Connection test passed, sending OTP via Aakash SMS to:', cleanPhone);
       
-      // For Firebase Phone Auth, we need to use RecaptchaVerifier
-      // This is a simplified version - in a real app you'd need to set up Recaptcha
-      console.log('OTP sent successfully (simulated)');
-      // Set OTP expiry to 1 hour
-      const expiresAt = Date.now() + (60 * 60 * 1000); // 1 hour from now
-      return { success: true, expiresAt };
+      // Clean expired OTPs before sending new one
+      await clearExpiredOTPs();
+      
+      // Send OTP using Aakash SMS API
+      const otpResult = await sendOtpViaSMS(cleanPhone);
+      
+      if (otpResult.success) {
+        console.log('OTP sent successfully via Aakash SMS API');
+        return { 
+          success: true, 
+          expiresAt: otpResult.expiresAt 
+        };
+      } else {
+        console.error('Failed to send OTP via Aakash SMS:', otpResult.error);
+        return { 
+          success: false, 
+          error: otpResult.error || 'Failed to send OTP. Please try again.' 
+        };
+      }
     } catch (error) {
       console.error('Network or other error during OTP send:', error);
       if (error instanceof Error) {
@@ -334,18 +349,27 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
         }
       }
 
-      // Test connection first
+      console.log('Verifying OTP locally for phone:', cleanPhone);
+      
+      // Verify OTP using local storage and Aakash SMS verification
+      const otpVerifyResult = await verifyOtpLocal(cleanPhone, token);
+      
+      if (!otpVerifyResult.success) {
+        console.error('OTP verification failed:', otpVerifyResult.error);
+        return { 
+          success: false, 
+          error: otpVerifyResult.error || 'Invalid OTP. Please try again.' 
+        };
+      }
+
+      console.log('OTP verification successful with Aakash SMS');
+
+      // Test Firebase connection for user data management
       const connectionTest = await testFirebaseConnectionDetailed();
       if (!connectionTest.success) {
         console.error('Connection test failed:', connectionTest.error);
         return { success: false, error: `Connection failed: ${connectionTest.error}` };
       }
-
-      console.log('Verifying OTP for phone:', cleanPhone);
-      
-      // For now, we'll use a simplified approach since Firebase Phone Auth requires Recaptcha
-      // In a production app, you'd need to set up RecaptchaVerifier
-      console.log('OTP verification successful (simulated)');
       
       // Create a consistent user ID based on phone number to prevent duplicates
       const phoneHash = cleanPhone.replace(/[^0-9]/g, '');
@@ -427,7 +451,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
         // Preload customers and transactions in parallel for faster loading
         const preloadPromises = [
           firestoreHelpers.getCustomers(userId),
-          firestoreHelpers.getAllTransactionEntries(userId)
+          firestoreHelpers.getTransactionEntries(userId) // Fixed: use getTransactionEntries instead of getAllTransactionEntries
         ];
         
         const [preloadedCustomers, preloadedTransactions] = await Promise.all(preloadPromises);
@@ -604,6 +628,12 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
       setFirebaseUser(null);
       setIsLoading(false);
       
+      // Navigate directly to home immediately to avoid showing intermediate pages
+      setTimeout(() => {
+        const { router } = require('expo-router');
+        router.replace('/(tabs)/(home)');
+      }, 100);
+      
       // Sign out from Firebase in background (non-blocking)
       Promise.race([
         auth.signOut(),
@@ -619,6 +649,14 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
       setUser(null);
       setFirebaseUser(null);
       setIsLoading(false);
+      
+      // Ensure navigation to home even on error
+      try {
+        const { router } = require('expo-router');
+        router.replace('/(tabs)/(home)');
+      } catch (navError) {
+        console.error('Navigation error during sign out:', navError);
+      }
     }
   };
 

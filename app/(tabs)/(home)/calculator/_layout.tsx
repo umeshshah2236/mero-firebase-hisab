@@ -8,24 +8,29 @@ export default function CalculatorLayout() {
       headerShown: false,
       gestureEnabled: true,
       gestureDirection: 'horizontal',
-      animation: Platform.OS === 'android' ? 'none' : 'slide_from_right',
-      animationDuration: Platform.OS === 'android' ? 0 : 300,
-      animationTypeForReplace: 'push',
-      detachPreviousScreen: false,
-      freezeOnBlur: Platform.OS === 'android' ? false : true, // Keep Android screens active
-      lazy: false, // Pre-render all screens
+      animation: 'slide_from_right', // Forward navigation - slide from right  
+      animationDuration: Platform.OS === 'android' ? 250 : 300, // Slightly faster on Android
+      animationTypeForReplace: Platform.OS === 'android' ? 'push' : 'push',
     }}>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen 
+        name="index" 
+        options={{ 
+          headerShown: false,
+          // Android-specific: VERY different animation when coming back to index
+          ...(Platform.OS === 'android' && {
+            animation: 'slide_from_bottom', // Dramatic upward slide for Android backward
+            animationDuration: 400, // Slightly longer to make it more noticeable
+          }),
+        }} 
+      />
       <Stack.Screen name="results" options={{ 
         headerShown: false, 
         presentation: 'card',
         gestureEnabled: true,
         gestureDirection: 'horizontal',
-        animation: Platform.OS === 'android' ? 'none' : 'slide_from_right',
-        animationDuration: Platform.OS === 'android' ? 0 : 300,
-        animationTypeForReplace: 'push',
-        freezeOnBlur: Platform.OS === 'android' ? false : true,
-        lazy: false,
+        animation: 'slide_from_right', // Forward: Calculator → Results
+        animationDuration: Platform.OS === 'android' ? 250 : 300, // Slightly faster on Android
+        animationTypeForReplace: Platform.OS === 'android' ? 'pop' : 'push', // Pop for Android backward
       }} />
     </Stack>
   );

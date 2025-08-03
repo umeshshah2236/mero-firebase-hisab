@@ -1,5 +1,5 @@
 import { initializeApp, getApp } from 'firebase/app';
-import { initializeAuth, getAuth, PhoneAuthProvider, signInWithCredential, onAuthStateChanged, signOut as firebaseSignOut, User as FirebaseUser } from 'firebase/auth';
+import { initializeAuth, getAuth, onAuthStateChanged, signOut as firebaseSignOut, User as FirebaseUser } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, deleteDoc, query, where, orderBy, limit, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TransactionEntry } from '@/contexts/TransactionEntriesContext';
@@ -468,7 +468,7 @@ export const firestoreHelpers = {
         customers: 0,
         transactions: 0,
         profile: false,
-        errors: []
+        errors: [] as string[]
       };
 
       // 1. Delete all customers

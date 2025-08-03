@@ -88,9 +88,48 @@ export default function TabLayout() {
         }}
         listeners={{
           tabPress: (e) => {
-            // Add haptic feedback only - no navigation logic
+            // Add haptic feedback
             if (Platform.OS !== 'web') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }
+            
+            // Prevent navigation if user is signing out or during loading states
+            if (isProcessingPress.current) {
+              e.preventDefault();
+              return;
+            }
+            
+            // Handle authenticated vs non-authenticated navigation
+            if (isAuthenticated) {
+              // For authenticated users, check if already at dashboard
+              if (pathname === '/(tabs)/(home)/dashboard') {
+                // Already at dashboard, do nothing
+                e.preventDefault();
+                console.log('Already at dashboard, home button disabled');
+                return;
+              }
+              // Navigate to dashboard with no animation
+              e.preventDefault();
+              isProcessingPress.current = true;
+              router.replace('/(tabs)/(home)/dashboard');
+              setTimeout(() => {
+                isProcessingPress.current = false;
+              }, 50);
+            } else {
+              // For non-authenticated users, check if already at home
+              if (pathname === '/(tabs)/(home)') {
+                // Already at home, do nothing
+                e.preventDefault();
+                console.log('Already at home, home button disabled');
+                return;
+              }
+              // Navigate to home index
+              e.preventDefault();
+              isProcessingPress.current = true;
+              setTimeout(() => {
+                router.push('/(tabs)/(home)');
+                isProcessingPress.current = false;
+              }, 100);
             }
           },
         }}

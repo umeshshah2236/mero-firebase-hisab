@@ -87,10 +87,14 @@ export default function KarobarResultsScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Add a small delay for smoother transition
-    setTimeout(() => {
+    // Android: Use DRAMATIC slide from bottom transition - completely different from forward slide
+    if (Platform.OS === 'android') {
+      // Use router.replace to trigger the slide_from_bottom animation set in layout
+      router.replace('/(tabs)/(home)/karobar');
+    } else {
+      // Standard back navigation for iOS with natural slide_from_left
       router.back();
-    }, 100);
+    }
   };
 
   const getLocalizedMonthName = (monthIndex: number) => {

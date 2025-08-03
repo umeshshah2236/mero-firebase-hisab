@@ -137,10 +137,10 @@ export default function SignInScreen() {
     if (result.success) {
       setIsOtpSent(true);
       setCountdown(60); // 1 minute countdown (60 seconds)
-      setOtpExpiryTime(result.expiresAt || (Date.now() + (60 * 60 * 1000))); // Use server time or fallback to 1 hour
+      setOtpExpiryTime(result.expiresAt || (Date.now() + (10 * 60 * 1000))); // Use server time or fallback to 10 minutes
       setOtpExpired(false);
       setOtp(''); // Clear previous OTP
-      Alert.alert('OTP Sent', 'Please check your phone for the verification code. Code expires in 1 hour.');
+      Alert.alert('OTP Sent', 'Please check your phone for the verification code. Code expires in 10 minutes.');
     } else {
       setErrors({ phone: result.error });
       Alert.alert('Failed to Send OTP', result.error || 'Please try again.');
@@ -192,8 +192,8 @@ export default function SignInScreen() {
       setOtpExpired(false);
       setTimeRemaining('');
       
-      // Don't navigate here - let the AuthContext and dashboard handle navigation
-      // This prevents double navigation and loading issues
+      // Navigate immediately to dashboard for seamless transition
+      router.replace('/(tabs)/(home)/dashboard');
     } else {
       setErrors({ otp: result.error });
       
@@ -233,8 +233,8 @@ export default function SignInScreen() {
     
     // Add a small delay for smoother transition
     setTimeout(() => {
-      // Navigate directly to settings instead of using router.back()
-      router.push('/(tabs)/settings');
+      // Navigate back to settings with slide_from_left (backward navigation)
+      router.back();
     }, 100);
   };
 

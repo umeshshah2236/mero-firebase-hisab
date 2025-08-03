@@ -52,7 +52,7 @@ function RootLayoutNav() {
       if (pathname.startsWith('/(tabs)/(home)/dashboard') || 
           pathname.startsWith('/(tabs)/(home)/customer') || 
           pathname.startsWith('/(tabs)/(home)/add-')) {
-        // Use immediate navigation for smooth sign out transition
+        // Immediate navigation for smooth sign out transition
         router.replace('/(tabs)/(home)');
       }
     }
@@ -90,8 +90,10 @@ function RootLayoutNav() {
       <Stack screenOptions={{ 
         headerBackTitle: "Back",
         gestureEnabled: true,
-        animation: 'slide_from_right',
-        animationDuration: 1000, // Much slower animation for consistency
+        animation: 'slide_from_right', // Forward navigation - slide from right
+        animationDuration: 300, // Smooth animation duration
+        animationTypeForReplace: 'push',
+        gestureDirection: 'horizontal',
       }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen 
@@ -99,10 +101,11 @@ function RootLayoutNav() {
           options={{ 
             headerShown: false, 
             headerBackVisible: false,
-            gestureEnabled: true, // Enable gesture for smoother back navigation
+            gestureEnabled: true,
             gestureDirection: 'horizontal',
-            animation: 'slide_from_right',
-            animationDuration: 1000, // Much slower for sign-in
+            animation: 'slide_from_right', // Forward: Settings → Sign-in
+            animationDuration: 300,
+            animationTypeForReplace: 'push',
           }} 
         />
 
