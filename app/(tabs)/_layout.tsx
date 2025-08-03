@@ -1,7 +1,7 @@
 import { Tabs, router, usePathname } from "expo-router";
 import { Calculator, Settings, BarChart3, ArrowLeft, Home } from "lucide-react-native";
 import React, { useRef } from "react";
-import { BackHandler, Platform } from "react-native";
+import { BackHandler, Platform, TouchableOpacity } from "react-native";
 import * as Haptics from 'expo-haptics';
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -16,7 +16,16 @@ export default function TabLayout() {
   const isProcessingPress = useRef(false);
   
   // Debug: Log the current pathname
-  console.log('Current pathname:', pathname, 'isAuthenticated:', isAuthenticated);
+  console.log('🏠 TabLayout - Current pathname:', pathname, 'isAuthenticated:', isAuthenticated);
+  
+  // Check if we're on a home page for debugging
+  const isCurrentlyOnHomePage = pathname === '/(tabs)/(home)/dashboard' || 
+                               pathname === '/(tabs)/(home)' ||
+                               pathname === '/(tabs)/(home)/index' ||
+                               pathname.includes('/(tabs)/(home)/') ||
+                               pathname.includes('/dashboard') ||
+                               pathname.includes('/home');
+  console.log('🏠 Is currently on home page:', isCurrentlyOnHomePage);
   
   // Simple logic:
   // - Public flow (not authenticated): ALWAYS show Calculator icon, NEVER show back button
@@ -75,61 +84,73 @@ export default function TabLayout() {
           title: t('home'),
           tabBarLabel: t('home'),
           tabBarIcon: ({ color }) => {
+            // Check if we're already on home pages - SAME ROBUST CHECK AS TABPRESS
+            const isOnHomePage = pathname === '/(tabs)/(home)/dashboard' || 
+                                pathname === '/(tabs)/(home)' ||
+                                pathname === '/(tabs)/(home)/index' ||
+                                pathname.includes('/(tabs)/(home)/') ||
+                                pathname.includes('/dashboard') ||
+                                pathname.includes('/home');
+            
+            // Gray out icon when disabled, white when active
+            const iconColor = isOnHomePage ? "#666666" : "#FFFFFF"; // Darker gray when disabled
+            
             if (isAuthenticated) {
-              return <Home color="#FFFFFF" strokeWidth={2.5} />;
+              return <Home color={iconColor} strokeWidth={2.5} />;
             }
-            return <Calculator color="#FFFFFF" strokeWidth={2.5} />;
+            return <Calculator color={iconColor} strokeWidth={2.5} />;
           },
           headerShown: false,
           headerTitle: 'Home',
           headerTitleStyle: {
             fontWeight: 'bold',
           },
+
         }}
         listeners={{
           tabPress: (e) => {
-            // Add haptic feedback
+            // ALWAYS prevent default
+            e.preventDefault();
+            
+            // Check if we're already on home pages - MORE ROBUST CHECK
+            const isOnHomePage = pathname === '/(tabs)/(home)/dashboard' || 
+                                pathname === '/(tabs)/(home)' ||
+                                pathname === '/(tabs)/(home)/index' ||
+                                pathname.includes('/(tabs)/(home)/') ||
+                                pathname.includes('/dashboard') ||
+                                pathname.includes('/home');
+            
+            // If already on home page, do ABSOLUTELY NOTHING but maybe refresh data
+            if (isOnHomePage) {
+              console.log('🚫 HOME BUTTON DISABLED - Already at home area:', pathname);
+              console.log('🚫 Preventing all navigation and haptics');
+              
+              // Optional: Trigger a silent data refresh when user tries to click Home while at home
+              // This might help with the data loading issue
+              if (pathname.includes('dashboard')) {
+                console.log('🔄 Triggering silent data refresh for dashboard');
+                // Set a flag that dashboard can detect to refresh data
+                (globalThis as any).__forceHomeRefresh = Date.now();
+              }
+              
+              return; // Complete early exit - no navigation, no haptics
+            }
+            
+            // Only proceed if NOT on home page
+            console.log('✅ Home button functional - navigating from:', pathname);
+            
+            // Add haptic feedback only if button is actually functional
             if (Platform.OS !== 'web') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             }
             
-            // Prevent navigation if user is signing out or during loading states
-            if (isProcessingPress.current) {
-              e.preventDefault();
-              return;
-            }
-            
             // Handle authenticated vs non-authenticated navigation
             if (isAuthenticated) {
-              // For authenticated users, check if already at dashboard
-              if (pathname === '/(tabs)/(home)/dashboard') {
-                // Already at dashboard, do nothing
-                e.preventDefault();
-                console.log('Already at dashboard, home button disabled');
-                return;
-              }
-              // Navigate to dashboard with no animation
-              e.preventDefault();
-              isProcessingPress.current = true;
+              console.log('🏠 Navigating directly to dashboard (bypass index.tsx)');
               router.replace('/(tabs)/(home)/dashboard');
-              setTimeout(() => {
-                isProcessingPress.current = false;
-              }, 50);
             } else {
-              // For non-authenticated users, check if already at home
-              if (pathname === '/(tabs)/(home)') {
-                // Already at home, do nothing
-                e.preventDefault();
-                console.log('Already at home, home button disabled');
-                return;
-              }
-              // Navigate to home index
-              e.preventDefault();
-              isProcessingPress.current = true;
-              setTimeout(() => {
-                router.push('/(tabs)/(home)');
-                isProcessingPress.current = false;
-              }, 100);
+              console.log('🏠 Navigating to public home');
+              router.push('/(tabs)/(home)');
             }
           },
         }}

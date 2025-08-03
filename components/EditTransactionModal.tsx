@@ -5,7 +5,6 @@ import {
   View,
   Modal,
   TouchableOpacity,
-  TextInput,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +13,7 @@ import {
 import { X, Save, Trash2 } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTransactionEntries, TransactionEntry } from '@/contexts/TransactionEntriesContext';
+import TextInputWithDoneBar from './TextInputWithDoneBar';
 
 interface EditTransactionModalProps {
   visible: boolean;
@@ -198,7 +198,7 @@ export default function EditTransactionModal({
             </Text>
             <View style={[styles.amountContainer, { borderColor: theme.colors.border }]}>
               <Text style={[styles.currencySymbol, { color: theme.colors.text }]}>रु</Text>
-              <TextInput
+              <TextInputWithDoneBar
                 style={[styles.amountInput, { color: theme.colors.text }]}
                 value={amount}
                 onChangeText={(text) => setAmount(formatAmount(text))}

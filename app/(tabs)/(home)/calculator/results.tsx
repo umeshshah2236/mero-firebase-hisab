@@ -128,27 +128,8 @@ export default React.memo(function ResultsScreen() {
       return;
     }
     
-    // For regular calculator flow - Android: go back to calculator with pre-filled data
-    if (Platform.OS === 'android') {
-      // On Android, go back to calculator with the data used for calculation
-      router.replace({
-        pathname: '/(tabs)/(home)/calculator',
-        params: {
-          principal: principal.toString(),
-          monthlyRate: monthlyRate.toString(),
-          startDateYear: startDate.year,
-          startDateMonth: startDate.month.toString(),
-          startDateDay: startDate.day.toString(),
-          endDateYear: endDate.year,
-          endDateMonth: endDate.month.toString(),
-          endDateDay: endDate.day.toString(),
-          fromResults: 'true' // Flag to indicate this came from results
-        }
-      });
-    } else {
-      // On iOS, use standard back navigation
-      router.back();
-    }
+    // For regular calculator flow - use simple back navigation
+    router.back();
   };
 
   const getLocalizedMonthName = (monthIndex: number) => {

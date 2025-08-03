@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, Platform, KeyboardAvoidingView, ScrollView, Dimensions, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Alert, Platform, KeyboardAvoidingView, ScrollView, Dimensions, Keyboard, TouchableWithoutFeedback, TextInput } from 'react-native';
+import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, User, Phone, Check } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -435,7 +436,7 @@ export default function CustomerFormScreen() {
                 backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#f8fafc',
               }]}>
                 <User size={20} color={isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b'} style={styles.inputIcon} />
-                <TextInput
+                <TextInputWithDoneBar
                   ref={nameInputRef}
                   style={[styles.input, { color: isDark ? theme.colors.text : '#1e293b' }]}
                   placeholder={t('enterCustomerName')}
@@ -491,7 +492,7 @@ export default function CustomerFormScreen() {
                   color: isDark ? theme.colors.text : '#1e293b',
                   marginRight: 8,
                 }]}>+977</Text>
-                <TextInput
+                <TextInputWithDoneBar
                   ref={phoneInputRef}
                   style={[styles.input, { color: isDark ? theme.colors.text : '#1e293b' }]}
                   placeholder={t('mobileNumber')}

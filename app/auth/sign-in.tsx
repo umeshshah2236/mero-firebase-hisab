@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Alert, Dimensions, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Dimensions, TouchableWithoutFeedback, Keyboard, TextInput } from 'react-native';
+import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, Stack } from 'expo-router';
 import { ArrowLeft, Phone, MessageSquare } from 'lucide-react-native';
@@ -30,8 +31,8 @@ export default function SignInScreen() {
   const { checkUserExists, sendOtp, verifyOtp } = useAuth();
   const { isOnline } = useNetwork();
   const insets = useSafeAreaInsets();
-  const phoneInputRef = useRef<TextInput>(null);
-  const otpInputRef = useRef<TextInput>(null);
+  const phoneInputRef = useRef<any>(null);
+  const otpInputRef = useRef<any>(null);
   
   const [phoneNumber, setPhoneNumber] = useState('+977');
   const [otp, setOtp] = useState('');
@@ -338,7 +339,7 @@ export default function SignInScreen() {
                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#f8fafc',
                  }]}>
                   <Phone size={20} color={isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b'} style={styles.inputIcon} />
-                  <TextInput
+                  <TextInputWithDoneBar
                     ref={phoneInputRef}
                     style={[styles.input, { color: isDark ? theme.colors.text : '#1e293b' }, Platform.OS === 'web' && styles.webInput]}
                     value={phoneNumber}
@@ -391,7 +392,9 @@ export default function SignInScreen() {
                 }]}>
                   {otpExpired 
                     ? 'OTP has expired. Please request a new code.' 
-                    : `Enter the 6-digit code sent to your phone.${timeRemaining ? ` Expires in ${timeRemaining}` : ''}`
+                    : Platform.OS === 'android' 
+                      ? `Enter 6-digit code.${timeRemaining ? ` Expires in ${timeRemaining}` : ''}`
+                      : `Enter the 6-digit code sent to your phone.${timeRemaining ? ` Expires in ${timeRemaining}` : ''}`
                   }
                 </Text>
                  <View style={[styles.inputContainer, {
@@ -399,7 +402,7 @@ export default function SignInScreen() {
                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#f8fafc',
                  }]}>
                   <MessageSquare size={20} color={isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b'} style={styles.inputIcon} />
-                  <TextInput
+                  <TextInputWithDoneBar
                     ref={otpInputRef}
                     style={[styles.input, { color: isDark ? theme.colors.text : '#1e293b', textAlign: 'center', letterSpacing: 4 }, Platform.OS === 'web' && styles.webInput]}
                     value={otp}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, Dimensions, ActivityIndicator, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Platform, KeyboardAvoidingView, Dimensions, ActivityIndicator, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { Stack, router } from 'expo-router';
 import { Search, Plus, User, ArrowLeft } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -409,7 +410,7 @@ export default function AddCustomerScreen() {
                   backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#f8fafc',
                 }]}>
                   <User size={20} color={isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b'} style={styles.inputIcon} />
-                  <TextInput
+                  <TextInputWithDoneBar
                     style={[styles.input, { color: isDark ? theme.colors.text : '#1e293b' }]}
                     placeholder={t('enterCustomerName')}
                     placeholderTextColor={isDark ? 'rgba(255, 255, 255, 0.4)' : '#94a3b8'}
@@ -603,7 +604,7 @@ export default function AddCustomerScreen() {
                 backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#f8fafc',
               }]}>
                 <Search size={20} color={isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b'} style={styles.inputIcon} />
-                <TextInput
+                <TextInputWithDoneBar
                   style={[styles.input, { color: isDark ? theme.colors.text : '#1e293b' }]}
                   placeholder={t('customerNameSearch')}
                   placeholderTextColor={isDark ? 'rgba(255, 255, 255, 0.4)' : '#94a3b8'}

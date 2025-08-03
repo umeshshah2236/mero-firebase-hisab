@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Mero Hisab v3 Clone",
+    "name": "Mero Hisab",
     "slug": "mero-hisab-calculators-v2-bxrizund-hl0dguzo-512fcufe-xxznrvw5-5n2nf1x5-7dwzwvdz",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#3B82F6"
     },
     "ios": {
       "supportsTablet": true,
@@ -22,7 +22,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#3B82F6"
       },
       "package": "app.rork.mero-hisab-calculators-v2-bxrizund-hl0dguzo-512fcufe-xxznrvw5-5n2nf1x5-7dwzwvdz",
       "permissions": [

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, Alert, Platform, Dimensions, TextInput } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, Alert, Platform, Dimensions } from 'react-native';
+import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { Stack, router } from 'expo-router';
-import { ChevronRight, Globe, Shield, FileText, Info, Palette, Sun, Moon, Smartphone, LogOut, User, Settings, Wifi, ArrowLeft, Trash2, X } from 'lucide-react-native';
+import { ChevronRight, Globe, Shield, FileText, Info, Palette, Sun, Moon, Smartphone, LogOut, User, Settings, Wifi, Trash2, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -359,16 +360,7 @@ export default function SettingsScreen() {
 
 
 
-  const handleBackPress = () => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    
-    // Add a small delay for smoother transition
-    setTimeout(() => {
-      router.back();
-    }, 100);
-  };
+
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -377,16 +369,11 @@ export default function SettingsScreen() {
         paddingTop: Platform.OS === 'ios' ? insets.top + (screenWidth < 375 ? 6 : screenWidth < 414 ? 8 : 10) : insets.top + 40, // Increased padding for Android camera area
         marginTop: Platform.OS === 'android' ? -insets.top : 0, // Negative margin to extend behind status bar on Android
       }]}>
-        <TouchableOpacity style={styles.backIconButton} onPress={handleBackPress}>
-          <ArrowLeft size={screenWidth < 375 ? 24 : screenWidth < 414 ? 26 : 28} color="white" />
-        </TouchableOpacity>
-        <View style={styles.headerTextContainer}>
-          <View style={styles.headerTitleRow}>
-            <Settings size={28} color="white" style={styles.headerIcon} />
-            <Text style={styles.simpleHeaderTitle}>
-              {t('settings')}
-            </Text>
-          </View>
+        <View style={styles.headerTitleRow}>
+          <Settings size={28} color="white" />
+          <Text style={styles.simpleHeaderTitle}>
+            {t('settings')}
+          </Text>
         </View>
       </View>
       
@@ -699,7 +686,7 @@ export default function SettingsScreen() {
                     Enter the 6-digit code sent to {user?.phone}
                   </Text>
                   
-                  <TextInput
+                  <TextInputWithDoneBar
                     style={[styles.otpInput, { 
                       backgroundColor: theme.colors.surface,
                       borderColor: otpError ? (isDark ? '#FCA5A5' : '#dc2626') : theme.colors.border,
@@ -792,6 +779,7 @@ const styles = StyleSheet.create({
     paddingBottom: 15,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -799,25 +787,11 @@ const styles = StyleSheet.create({
     elevation: 3,
     position: 'relative',
   },
-  backIconButton: {
-    padding: 8,
-    marginRight: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 20,
-  },
-  headerTextContainer: {
-    flex: 1,
-    position: 'relative',
-  },
   headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    marginRight: 63,
-  },
-  headerIcon: {
-    marginRight: screenWidth < 375 ? 6 : 8,
+    gap: screenWidth < 375 ? 6 : 8,
   },
   simpleHeaderTitle: {
     fontSize: screenWidth < 375 ? 22 : screenWidth < 414 ? 24 : 26,

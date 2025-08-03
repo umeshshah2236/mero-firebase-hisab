@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Dimensions, RefreshControl, TextInput, SafeAreaView, Animated, Linking } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Dimensions, RefreshControl, SafeAreaView, Animated, Linking } from 'react-native';
+import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { Plus, User, Users, Search, TrendingUp, TrendingDown, Clock, Phone, MessageCircle, Heart } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -61,11 +62,23 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   });
   const [forceUpdate, setForceUpdate] = useState(0);
   
-  // 🚀 CUSTOMER DETAIL APPROACH: Start with fresh data flag as true
-  const [hasFreshTransactionData, setHasFreshTransactionData] = useState(true); // Always start as true like customer detail
+  // 🚀 STATEMENT PAGE APPROACH: Start with fresh data flag as true
+  const [hasFreshTransactionData, setHasFreshTransactionData] = useState(true); // Always start as true like statement page
   
-  // Remove loading state - not needed with customer detail approach
+  // Remove loading state - not needed with statement page approach
   const [isInitialLoad, setIsInitialLoad] = useState(false); // Start as false - no loading needed
+  
+  // Track if screen is focused - ALL useState MUST BE TOGETHER
+  const [isScreenFocused, setIsScreenFocused] = useState(false);
+  
+  // Customer loading state - specifically for when returning from statement pages
+  const [isCustomerDataLoading, setIsCustomerDataLoading] = useState(false);
+  const [isReturningFromStatement, setIsReturningFromStatement] = useState(false);
+
+  // Silent background update tracking (like statement page)
+  const [previousTransactionCount, setPreviousTransactionCount] = useState(0);
+  const [previousCustomerCount, setPreviousCustomerCount] = useState(0);
+  const lastDataUpdateRef = useRef(0);
 
   // Redirect to home if user is not authenticated - optimized for smooth transitions
   useEffect(() => {
@@ -90,35 +103,126 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     }
   }, [firebaseUser, setFirebaseUser, setCustomersFirebaseUser]);
 
-  // Track if screen is focused
-  const [isScreenFocused, setIsScreenFocused] = useState(false);
+  // ALL useRef hooks must be with other hooks at the top
+  const customerTransactionsCache = React.useRef(new Map<string, TransactionEntry[]>()).current;
+  const balanceRef = React.useRef((() => {
+    // Try to restore from global cache if available to prevent intermediate screen flash
+    const globalCache = (globalThis as any).__dashboardCache;
+    if (globalCache?.ready) {
+      console.log('🚀 Dashboard: Restoring balance from global cache:', globalCache);
+      return globalCache;
+    }
+    
+    // Default initialization - but don't show "All settled" initially
+    return { 
+      toReceive: 0, 
+      toGive: 0, 
+      ready: false, 
+      lastStatus: 'Loading...' // Remember the last status text
+    };
+  })());
 
-  // 🚀 CUSTOMER DETAIL APPROACH: Background refresh without blocking UI
-  const handleBackgroundRefresh = React.useCallback(async () => {
-    console.log('Dashboard: handleBackgroundRefresh called (CUSTOMER DETAIL APPROACH)');
+  // Build transaction cache efficiently - MOVED TO TOP
+  React.useEffect(() => {
+    console.log('Dashboard: Building FAST transaction cache');
+    customerTransactionsCache.clear();
+    
+    transactionEntries.forEach((transaction) => {
+      const customerName = transaction.customer_name;
+      if (!customerTransactionsCache.has(customerName)) {
+        customerTransactionsCache.set(customerName, []);
+      }
+      customerTransactionsCache.get(customerName)!.push(transaction);
+    });
+    
+    console.log('Dashboard: Transaction cache built for', customerTransactionsCache.size, 'customers');
+  }, [transactionEntries]);
+
+  // 🚀 STATEMENT PAGE APPROACH: Silent background refresh (no UI disruption)
+  const handleSilentBackgroundRefresh = React.useCallback(async () => {
+    console.log('Dashboard: Silent background refresh called (Statement page approach)');
+    console.log('🐛 Auth state - isAuthenticated:', isAuthenticated, 'user:', !!user);
     
     try {
-      console.log('Dashboard: Starting background data refresh...');
-      
       if (isAuthenticated && user) {
-        console.log('Dashboard: Fetching transaction entries in background');
-        const entries = await getAllTransactionEntries();
-        console.log('Dashboard: Background data fetched successfully:', entries.length);
+        console.log('Dashboard: Fetching data silently in background...');
+        const [customersResult, entriesResult] = await Promise.all([
+          fetchCustomers(false), // Silent fetch
+          getAllTransactionEntries()
+        ]);
         
-        // Always update data (like customer detail does)
-        setTransactionEntries(entries || []);
+        console.log('Dashboard: Silent background data fetched');
+        console.log('Customers:', Array.isArray(customersResult) ? customersResult.length : 0, 'Transactions:', entriesResult?.length || 0);
+        
+        // Only update if data actually changed (prevents unnecessary re-renders)
+        const newTransactionCount = entriesResult?.length || 0;
+        const newCustomerCount = Array.isArray(customersResult) ? customersResult.length : 0;
+        
+        // Always update both transaction entries and force customers refresh
+        console.log('Dashboard: Updating data silently');
+        setTransactionEntries(entriesResult || []);
+        
+        // Force customers to be refreshed if data is different
+        if (newTransactionCount !== transactionEntries.length || 
+            newCustomerCount !== customers.length) {
+          console.log('Dashboard: Data has changed - forcing customers refresh');
+          // Force a context refresh to ensure customers are updated
+          fetchCustomers(true); // Force refresh
+        }
+        
         setHasFreshTransactionData(true);
+        
+        // Force UI recalculation after silent refresh
+        setForceUpdate(prev => prev + 1);
+        console.log('🔄 Silent refresh completed, triggering UI recalculation');
+        
+        // Hide customer loading state once data is ready
+        if (isReturningFromStatement && isCustomerDataLoading) {
+          console.log('🏠 Dashboard: Data loaded - hiding customer loading state');
+          setTimeout(() => {
+            setIsCustomerDataLoading(false);
+            setIsReturningFromStatement(false);
+          }, 100); // Small delay to ensure UI has updated
+        }
+      } else {
+        console.log('🚨 Dashboard: Cannot refresh data - user not authenticated or missing');
+        console.log('🐛 isAuthenticated:', isAuthenticated, 'user exists:', !!user);
+        
+        // Hide loading state even if refresh fails
+        if (isCustomerDataLoading) {
+          setIsCustomerDataLoading(false);
+          setIsReturningFromStatement(false);
+        }
       }
     } catch (error) {
-      console.error('Dashboard: Error in background refresh:', error);
+      console.error('Dashboard: Error in silent background refresh:', error);
+      // Silent error handling - don't disrupt UI
+      
+      // Hide loading state on error
+      if (isCustomerDataLoading) {
+        setIsCustomerDataLoading(false);
+        setIsReturningFromStatement(false);
+      }
     }
-  }, [isAuthenticated, user, getAllTransactionEntries]);
+  }, [isAuthenticated, user, getAllTransactionEntries, fetchCustomers, transactionEntries.length, customers.length, isReturningFromStatement, isCustomerDataLoading]);
 
-  // Track if screen is focused - CUSTOMER DETAIL APPROACH: Background refresh only
+  // Simple approach: Always refresh data when screen is focused, but completely silently
+  // This ensures data is always current without any visual reload behavior
+
+  // 🎯 SIMPLE FIX: Always load data on focus but make it completely invisible
   useFocusEffect(
     React.useCallback(() => {
-      console.log('Dashboard: Screen focused, starting background refresh (CUSTOMER DETAIL APPROACH)');
+      console.log('Dashboard: Screen focused - loading data silently');
       setIsScreenFocused(true);
+      
+      // Check if we're returning from a statement page (customer-detail)
+      const isComingFromStatement = (globalThis as any).__isReturningFromStatement;
+      if (isComingFromStatement) {
+        console.log('🏠 Dashboard: Returning from statement page - show loading');
+        setIsReturningFromStatement(true);
+        setIsCustomerDataLoading(true);
+        delete (globalThis as any).__isReturningFromStatement;
+      }
       
       // Clear preloaded data flag if it exists
       const preloadedData = (globalThis as any).__preloadedData;
@@ -127,14 +231,33 @@ const DashboardScreen = React.memo(function DashboardScreen() {
         delete (globalThis as any).__preloadedData;
       }
       
-      // Perform background refresh like customer detail (doesn't block UI)
-      handleBackgroundRefresh();
+      // ALWAYS refresh data on focus, but silently in background
+      // This ensures data is always current, no visual reload behavior
+      console.log('Dashboard: Always refreshing data silently on focus');
+      console.log('🐛 Current data state - Customers:', customers.length, 'Transactions:', transactionEntries.length);
+      
+      // Check for force refresh flag from disabled Home button click
+      const forceHomeRefresh = (globalThis as any).__forceHomeRefresh;
+      if (forceHomeRefresh && (Date.now() - forceHomeRefresh) < 2000) {
+        console.log('🏠 Detected Home button click while at home - forcing data refresh');
+        delete (globalThis as any).__forceHomeRefresh;
+        handleSilentBackgroundRefresh(); // Immediate refresh
+        return;
+      }
+      
+      // Force immediate refresh if no data
+      if (customers.length === 0 || transactionEntries.length === 0) {
+        console.log('🚨 No data detected - forcing immediate refresh');
+        handleSilentBackgroundRefresh(); // Immediate without timeout
+      } else {
+        setTimeout(() => handleSilentBackgroundRefresh(), 50); // Normal silent refresh
+      }
 
       return () => {
         console.log('Dashboard: Screen unfocused');
         setIsScreenFocused(false);
       };
-    }, [handleBackgroundRefresh])
+    }, [handleSilentBackgroundRefresh, customers.length, transactionEntries.length]) // Include data lengths for reactive updates
   );
 
   // 🚀 CUSTOMER DETAIL APPROACH: No initial load needed - start fresh always
@@ -195,12 +318,16 @@ const DashboardScreen = React.memo(function DashboardScreen() {
         getAllTransactionEntries()
       ]);
       
-      console.log('Dashboard: Data fetched successfully');
+      console.log('Dashboard: Manual refresh data fetched successfully');
       console.log('Dashboard: Customers count:', Array.isArray(customersResult) ? customersResult.length : 0);
       console.log('Dashboard: Transactions count:', Array.isArray(transactionsResult) ? transactionsResult.length : 0);
       
-      // Update transaction entries state
+      // Update transaction entries state and force update
       setTransactionEntries(transactionsResult || []);
+      
+      // Force update counter to trigger re-calculation
+      setForceUpdate(prev => prev + 1);
+      console.log('🔄 Manual refresh completed, forcing UI update');
     } catch (error) {
       console.error('Dashboard: Error refreshing data:', error);
       // Handle errors silently for background refreshes
@@ -213,30 +340,15 @@ const DashboardScreen = React.memo(function DashboardScreen() {
 
 
 
-  // SUPER FAST: Cache all transactions by customer for instant access
-  const customerTransactionsCache = React.useRef(new Map<string, TransactionEntry[]>()).current;
-  
-  // Build transaction cache efficiently
-  React.useEffect(() => {
-    console.log('Dashboard: Building FAST transaction cache');
-    customerTransactionsCache.clear();
-    
-    transactionEntries.forEach((transaction) => {
-      const customerName = transaction.customer_name;
-      if (!customerTransactionsCache.has(customerName)) {
-        customerTransactionsCache.set(customerName, []);
-      }
-      customerTransactionsCache.get(customerName)!.push(transaction);
-    });
-    
-    console.log('Dashboard: Transaction cache built for', customerTransactionsCache.size, 'customers');
-  }, [transactionEntries]);
+
 
   // Create customer summaries combining database customers with transaction data - OPTIMIZED
-  const getCustomerSummaries = (): PersonSummary[] => {
+  const getCustomerSummaries = React.useCallback((): PersonSummary[] => {
     console.log('Dashboard: Calculating FAST customer summaries');
     console.log('Customers loaded:', customers.length);
     console.log('Transactions loaded:', transactionEntries.length);
+    console.log('🐛 DEBUG - Customers context loading state:', customersLoading);
+    console.log('🐛 DEBUG - Transactions context loading state:', transactionLoading);
     
     // Log some sample transaction data for debugging
     if (transactionEntries.length > 0) {
@@ -335,7 +447,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       
       return nameA.localeCompare(nameB);
     });
-  };
+  }, [customers, transactionEntries, customerTransactionsCache]);
 
   // Filter function for search
   const filterPersons = (persons: PersonSummary[], query: string): PersonSummary[] => {
@@ -347,14 +459,40 @@ const DashboardScreen = React.memo(function DashboardScreen() {
 
 
 
-  const allCustomers = getCustomerSummaries();
+  // CRITICAL FIX: Cache customer summaries to prevent "All Settled" flash during navigation
+  const allCustomers = React.useMemo(() => {
+    console.log('🔄 Recalculating customer summaries - forceUpdate:', forceUpdate);
+    
+    // Try to restore from global cache first
+    const globalCustomerCache = (globalThis as any).__customerSummariesCache;
+    const hasValidCache = globalCustomerCache && 
+                         Array.isArray(globalCustomerCache.summaries) && 
+                         globalCustomerCache.summaries.length > 0 &&
+                         globalCustomerCache.customersCount === customers.length &&
+                         globalCustomerCache.transactionsCount === transactionEntries.length;
+    
+    // If returning from statement page and we have valid cached data, use it immediately
+    if (hasValidCache && isReturningFromStatement) {
+      console.log('🚀 Dashboard: Restoring customer summaries from global cache:', globalCustomerCache.summaries.length, 'customers');
+      return globalCustomerCache.summaries;
+    }
+    
+    // Calculate fresh customer summaries
+    const freshSummaries = getCustomerSummaries();
+    
+    // Cache the result for future navigation
+    (globalThis as any).__customerSummariesCache = {
+      summaries: freshSummaries,
+      customersCount: customers.length,
+      transactionsCount: transactionEntries.length,
+      cachedAt: Date.now()
+    };
+    console.log('💾 Dashboard: Cached customer summaries:', freshSummaries.length, 'customers');
+    
+    return freshSummaries;
+  }, [getCustomerSummaries, forceUpdate, transactionEntries, customers, isReturningFromStatement]);
   
-  // Force re-calculation when transaction data changes
-  useEffect(() => {
-    console.log('Dashboard: Transaction data changed, recalculating customer summaries');
-    console.log('Current transaction count:', transactionEntries.length);
-    console.log('Force update count:', forceUpdate);
-  }, [transactionEntries, forceUpdate]);
+
   
   // Don't render content if user is not authenticated or still loading - but provide background to prevent white page
   if (authLoading || !isAuthenticated) {
@@ -391,13 +529,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
 
 
 
-  // ← PERSISTENT balance cache - NEVER reset once initialized, remembers last status
-  const balanceRef = React.useRef({ 
-    toReceive: 0, 
-    toGive: 0, 
-    ready: false, 
-    lastStatus: 'Loading...' // Remember the last status text
-  });
+
 
   // Calculate totals based on customer balances:
   // TO RECEIVE (Green) = sum of all positive balances (customers owe you)
@@ -408,7 +540,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   
   // Calculate current totals if we have data
   if (hasActualTransactionData) {
-    allCustomers.forEach((customer) => {
+    allCustomers.forEach((customer: PersonSummary) => {
       if (customer.netBalance > 0) {
         toReceive += customer.netBalance;
       } else if (customer.netBalance < 0) {
@@ -423,8 +555,8 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     const netBalance = toReceive - toGive;
     // Only show "All settled" if there's literally no transactions, not when balanced
     const currentStatus = netBalance > 0 ? t('toReceive') : netBalance < 0 ? t('toGive') : 
-                         (toReceive === 0 && toGive === 0) ? t('allSettled') : 
-                         balanceRef.current.lastStatus || t('allSettled');
+                         (toReceive === 0 && toGive === 0 && hasActualTransactionData) ? t('allSettled') : 
+                         balanceRef.current.lastStatus || (hasActualTransactionData ? t('allSettled') : 'Loading...');
     
     // Update cache with fresh data OR initialize on first load with customers
     balanceRef.current = { 
@@ -433,7 +565,17 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       ready: true, 
       lastStatus: currentStatus 
     };
+    
+    // CRITICAL FIX: Store in global cache to prevent intermediate screen flash during navigation
+    (globalThis as any).__dashboardCache = { ...balanceRef.current };
     console.log('Dashboard: Cache updated/initialized:', { toReceive, toGive, netBalance, ready: true, lastStatus: currentStatus });
+    
+    // Hide loading state immediately when real data is available
+    if (isReturningFromStatement && isCustomerDataLoading && hasActualTransactionData) {
+      console.log('🏠 Dashboard: Real data calculated - hiding loading state immediately');
+      setIsCustomerDataLoading(false);
+      setIsReturningFromStatement(false);
+    }
   } else if (!balanceRef.current.ready && allCustomers.length === 0 && customers.length === 0) {
     // True first-time load with no customers at all - show loading
     balanceRef.current = { toReceive: 0, toGive: 0, ready: false, lastStatus: 'Loading...' };
@@ -711,12 +853,16 @@ const DashboardScreen = React.memo(function DashboardScreen() {
           </View>
           <View style={styles.quickStatDivider} />
           <View style={styles.quickStatItem}>
-            <Text style={styles.quickStatValue}>{allCustomers.filter(c => c.status === 'active').length}</Text>
+            <Text style={styles.quickStatValue}>{allCustomers.filter((c: PersonSummary) => c.status === 'active').length}</Text>
             <Text style={styles.quickStatLabel}>{t('active')}</Text>
           </View>
           <View style={styles.quickStatDivider} />
           <View style={styles.quickStatItem}>
-            <Text style={[styles.quickStatValue, { color: '#10B981' }]}>रु{' '}{rcv.toLocaleString('en-IN')}</Text>
+            {(!isCustomerDataLoading || !isReturningFromStatement) ? (
+              <Text style={[styles.quickStatValue, { color: '#10B981' }]}>रु{' '}{rcv.toLocaleString('en-IN')}</Text>
+            ) : (
+              <Text style={[styles.quickStatValue, { color: theme.colors.textSecondary }]}>Loading...</Text>
+            )}
             <Text style={styles.quickStatLabel}>{t('toReceive')}</Text>
           </View>
         </View>
@@ -740,7 +886,11 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                 </View>
                 <Text style={styles.summaryCardTitle}>{t('toReceive')}</Text>
               </View>
-              <Text style={styles.summaryCardAmount}>रु{' '}{rcv.toLocaleString('en-IN')}</Text>
+              {(!isCustomerDataLoading || !isReturningFromStatement) ? (
+                <Text style={styles.summaryCardAmount}>रु{' '}{rcv.toLocaleString('en-IN')}</Text>
+              ) : (
+                <Text style={[styles.summaryCardAmount, { opacity: 0.7 }]}>Loading...</Text>
+              )}
               <View style={styles.summaryCardFooter}>
                 <Text style={styles.summaryCardSubtext}>{t('amountYoullReceive')}</Text>
               </View>
@@ -758,7 +908,11 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                 </View>
                 <Text style={styles.summaryCardTitle}>{t('toGive')}</Text>
               </View>
-              <Text style={styles.summaryCardAmount}>रु{' '}{gve.toLocaleString('en-IN')}</Text>
+              {(!isCustomerDataLoading || !isReturningFromStatement) ? (
+                <Text style={styles.summaryCardAmount}>रु{' '}{gve.toLocaleString('en-IN')}</Text>
+              ) : (
+                <Text style={[styles.summaryCardAmount, { opacity: 0.7 }]}>Loading...</Text>
+              )}
               <View style={styles.summaryCardFooter}>
                 <Text style={styles.summaryCardSubtext}>{t('amountYouOwe')}</Text>
               </View>
@@ -812,7 +966,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                 }]}>
                   <Search size={18} color={isDark ? '#9CA3AF' : '#6B7280'} />
                 </View>
-                <TextInput
+                <TextInputWithDoneBar
                   style={[styles.premiumSearchInput, { color: isDark ? '#F9FAFB' : '#111827' }]}
                   placeholder={t('searchCustomers')}
                   placeholderTextColor={isDark ? '#9CA3AF' : '#6B7280'}
@@ -861,12 +1015,29 @@ const DashboardScreen = React.memo(function DashboardScreen() {
             />
           }
         >
-          {/* Premium Customers List - Simplified without loading indicators */}
+          {/* Premium Customers List - With targeted loading for statement returns */}
           <View style={styles.premiumListContainer}>
             <View style={styles.premiumContentContainer}>
               {!transactionError && !customersError && (
                 <>
-                  {filteredCustomers.length > 0 ? (
+                  {/* Loading indicator specifically for returning from statement pages */}
+                  {isCustomerDataLoading && isReturningFromStatement && (
+                    <View style={styles.customerLoadingContainer}>
+                      <View style={styles.customerLoadingCard}>
+                        <View style={styles.customerLoadingContent}>
+                          <View style={styles.loadingIconContainer}>
+                            <Text style={[styles.loadingIcon, { color: theme.colors.primary }]}>⟳</Text>
+                          </View>
+                          <Text style={[styles.customerLoadingText, { color: theme.colors.textSecondary }]}>
+                            Loading customers...
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                  
+                  {/* Customer list - hide while loading from statement */}
+                  {(!isCustomerDataLoading || !isReturningFromStatement) && filteredCustomers.length > 0 ? (
                     <View style={styles.premiumCardsContainer}>
                       {filteredCustomers.map((person, index) => (
                         <View key={person.name} style={styles.premiumCardWrapper}>
@@ -874,7 +1045,10 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                         </View>
                       ))}
                     </View>
-                  ) : (
+                  ) : null}
+                  
+                  {/* Empty state for search or no customers - hide while loading from statement */}
+                  {(!isCustomerDataLoading || !isReturningFromStatement) && filteredCustomers.length === 0 && (
                     // CUSTOMER DETAIL APPROACH: Always show empty state when no data (no loading states)
                     <View style={styles.premiumEmptyState}>
                       <LinearGradient
@@ -1972,6 +2146,64 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: 'white',
+  },
+  
+  // Customer Loading Styles
+  customerLoadingContainer: {
+    marginBottom: 16,
+  },
+  customerLoadingCard: {
+    backgroundColor: 'rgba(99, 102, 241, 0.05)',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.1)',
+  },
+  customerLoadingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingIconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingIcon: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    // Simple CSS animation alternative for rotation
+    transform: [{ rotate: '0deg' }],
+  },
+  customerLoadingText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  
+  // Search Results Styles
+  noMatchesContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+  },
+  noMatchesContent: {
+    alignItems: 'center',
+    maxWidth: 300,
+  },
+  noMatchesIcon: {
+    marginBottom: 16,
+    opacity: 0.6,
+  },
+  noMatchesTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noMatchesDescription: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 
 });

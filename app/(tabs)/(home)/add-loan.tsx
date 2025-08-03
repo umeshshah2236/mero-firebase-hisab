@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, TextInput, Switch } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
+import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Save, X, Plus, Trash2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -447,7 +448,7 @@ export default function AddLoanScreen() {
             
             <View style={styles.inputContainer}>
               <Text style={[styles.label, { color: theme.colors.text }]}>Person's Name *</Text>
-              <TextInput
+              <TextInputWithDoneBar
                 style={[
                   styles.textInput,
                   {
@@ -489,7 +490,7 @@ export default function AddLoanScreen() {
 
             <View style={styles.inputContainer}>
               <Text style={[styles.label, { color: theme.colors.text }]}>Purpose/Description</Text>
-              <TextInput
+              <TextInputWithDoneBar
                 style={[
                   styles.textInput,
                   {

@@ -87,14 +87,8 @@ export default function KarobarResultsScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // For karobar calculator flow - go back to home page directly
-    if (Platform.OS === 'android') {
-      // On Android, navigate directly to home to avoid stack issues
-      router.replace('/(tabs)/(home)');
-    } else {
-      // On iOS, use standard back navigation
-      router.back();
-    }
+    // For karobar calculator flow - use simple back navigation
+    router.back();
   };
 
   const getLocalizedMonthName = (monthIndex: number) => {

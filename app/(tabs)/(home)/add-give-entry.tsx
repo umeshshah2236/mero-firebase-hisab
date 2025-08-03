@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, TextInput, ScrollView, Platform, Alert, SafeAreaView, KeyboardAvoidingView } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Platform, Alert, SafeAreaView, KeyboardAvoidingView } from 'react-native';
+import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Save, TrendingUp, Trash2, Plus, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -153,6 +154,10 @@ export default function AddGiveEntryScreen() {
         );
         
         console.log('Give entry updated successfully');
+        // Set transaction activity flag for dashboard smart refresh
+        (globalThis as any).__lastTransactionActivity = Date.now();
+        // CRITICAL FIX: Invalidate customer cache since transaction was modified
+        delete (globalThis as any).__customerSummariesCache;
         router.back();
       } else {
         // Create new transaction entry using selected date
@@ -182,6 +187,10 @@ export default function AddGiveEntryScreen() {
         }
         
         console.log('Give entry saved successfully');
+        // Set transaction activity flag for dashboard smart refresh
+        (globalThis as any).__lastTransactionActivity = Date.now();
+        // CRITICAL FIX: Invalidate customer cache since transaction was modified
+        delete (globalThis as any).__customerSummariesCache;
         router.back();
       }
       
@@ -284,6 +293,8 @@ export default function AddGiveEntryScreen() {
                 {
                   text: t('ok'),
                   onPress: () => {
+                    // Set transaction activity flag for dashboard smart refresh
+                    (globalThis as any).__lastTransactionActivity = Date.now();
                     // Navigate back to dashboard to refresh customer list
                     router.replace('/(tabs)/(home)/dashboard');
                   }
@@ -420,7 +431,7 @@ export default function AddGiveEntryScreen() {
                   {/* Description Input */}
                   <View style={styles.modernInputGroup}>
                     <Text style={[styles.modernLabel, { color: theme.colors.text }]}>{t('descriptionItemsNotes')}</Text>
-                    <TextInput
+                    <TextInputWithDoneBar
                       style={[
                         styles.modernTextInput,
                         {
@@ -458,7 +469,7 @@ export default function AddGiveEntryScreen() {
                   {/* Customer Name Field - Non-editable */}
                   <View style={styles.modernInputGroup}>
                     <Text style={[styles.modernLabel, { color: theme.colors.text }]}>{t('customerName')}</Text>
-                    <TextInput
+                    <TextInputWithDoneBar
                       style={[
                         styles.modernTextInput,
                         styles.lockedInput,

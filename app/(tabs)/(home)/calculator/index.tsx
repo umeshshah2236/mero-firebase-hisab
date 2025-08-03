@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Dimensions, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Calculator } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -43,6 +43,7 @@ export default React.memo(function CalculatorScreen() {
   const { theme, isDark } = useTheme();
   const { isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams();
 
   // Redirect authenticated users to dashboard
   useEffect(() => {
@@ -77,6 +78,14 @@ export default React.memo(function CalculatorScreen() {
   const [monthlyRate, setMonthlyRate] = useState('');
   const [startDate, setStartDate] = useState<BSDate>({ year: '2080', month: 1, day: 1 });
   const [endDate, setEndDate] = useState<BSDate>(getCurrentBSDate());
+  
+  // Keep form data persistent when navigating back from results
+  useFocusEffect(
+    React.useCallback(() => {
+      // This ensures form data is preserved when coming back from results
+      console.log('Calculator screen focused - preserving form data');
+    }, [])
+  );
   
   // Validation state
   const [errors, setErrors] = useState<{

@@ -23,6 +23,26 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [isPageFullyLoaded, setIsPageFullyLoaded] = useState(false);
   
+  // ALL useEffect hooks must come before any early returns
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      console.log('User authenticated, redirecting to dashboard');
+      // Immediate redirect for faster transition
+      router.replace('/(tabs)/(home)/dashboard');
+    }
+  }, [isAuthenticated, authLoading]);
+
+  // Mark page as fully loaded
+  useEffect(() => {
+    if (!isLoading && !authLoading && !themeLoading) {
+      const timer = setTimeout(() => {
+        setIsPageFullyLoaded(true);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, authLoading, themeLoading]);
+
   // Android-specific responsive dimensions
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
   const isAndroid = Platform.OS === 'android';
@@ -58,15 +78,6 @@ export default function HomeScreen() {
     return Math.round(basePadding * Math.min(Math.max(scale, 0.6), 0.85));
   };
 
-  // Redirect authenticated users to dashboard
-  useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      console.log('User authenticated, redirecting to dashboard');
-      // Immediate redirect for faster transition
-      router.replace('/(tabs)/(home)/dashboard');
-    }
-  }, [isAuthenticated, authLoading]);
-
   const handleFeaturePress = (route: string) => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -95,16 +106,6 @@ export default function HomeScreen() {
     }
     return 'Hi there!';
   };
-
-  // Mark page as fully loaded
-  useEffect(() => {
-    if (!isLoading && !authLoading && !themeLoading) {
-      const timer = setTimeout(() => {
-        setIsPageFullyLoaded(true);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isLoading, authLoading, themeLoading]);
 
   // Show loading screen
   if (isLoading || authLoading || themeLoading) {

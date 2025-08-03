@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useMemo, useCallback, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, Animated, Platform, ScrollView, RefreshControl, Alert, Modal, TextInput } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, Animated, Platform, ScrollView, RefreshControl, Alert, Modal } from 'react-native';
+import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { Stack, router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { ArrowLeft, TrendingUp, TrendingDown, Calendar, Clock, Edit3, Trash2, MoreHorizontal, UserX, Calculator, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -964,6 +965,10 @@ export default function CustomerDetailScreen() {
               if (transactionEntriesContext?.deleteTransactionEntry) {
                 await transactionEntriesContext.deleteTransactionEntry(transactionEntry.id);
                 console.log('Transaction deleted successfully, background refreshing data...');
+                // Set transaction activity flag for dashboard smart refresh
+                (globalThis as any).__lastTransactionActivity = Date.now();
+                // CRITICAL FIX: Invalidate customer cache since transaction was modified
+                delete (globalThis as any).__customerSummariesCache;
                 await handleBackgroundRefresh();
                 Alert.alert('Success', 'Transaction deleted successfully');
               }
@@ -1053,10 +1058,17 @@ export default function CustomerDetailScreen() {
                 console.log('Calling deleteCustomer with ID:', customerToDelete.id);
                 await deleteCustomer(customerToDelete.id);
                 console.log('Customer deleted successfully');
+                
+                // CRITICAL FIX: Invalidate customer cache since customer was deleted
+                console.log('🗑️ Customer deleted - invalidating customer summaries cache');
+                delete (globalThis as any).__customerSummariesCache;
+                
                 Alert.alert('Success', 'Customer deleted successfully', [
                   {
                     text: 'OK',
                     onPress: () => {
+                      // Set flag to show loading when returning to dashboard
+                      (globalThis as any).__isReturningFromStatement = true;
                       router.replace('/(tabs)/(home)/dashboard');
                     }
                   }
@@ -1078,6 +1090,12 @@ export default function CustomerDetailScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+    
+    // Set flag to show loading when returning to dashboard from statement
+    (globalThis as any).__isReturningFromStatement = true;
+    
+    // CRITICAL FIX: Ensure dashboard has cached calculations ready
+    console.log('🔄 Customer Detail: Preparing dashboard cache for smooth navigation');
     
     // Add a small delay for smoother transition
     setTimeout(() => {
@@ -1434,10 +1452,14 @@ export default function CustomerDetailScreen() {
         transaction={selectedTransaction}
         onTransactionUpdated={async () => {
           console.log('Transaction updated, background refreshing data immediately...');
+          // Set transaction activity flag for dashboard smart refresh
+          (globalThis as any).__lastTransactionActivity = Date.now();
           await handleBackgroundRefresh();
         }}
         onTransactionDeleted={async () => {
           console.log('Transaction deleted, background refreshing data immediately...');
+          // Set transaction activity flag for dashboard smart refresh
+          (globalThis as any).__lastTransactionActivity = Date.now();
           await handleBackgroundRefresh();
         }}
       />
@@ -1481,7 +1503,7 @@ export default function CustomerDetailScreen() {
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>{t('interestRate')} (%)</Text>
                 <View style={styles.inputContainer}>
-                  <TextInput
+                  <TextInputWithDoneBar
                     style={styles.textInput}
                     value={interestRate}
                     onChangeText={setInterestRate}

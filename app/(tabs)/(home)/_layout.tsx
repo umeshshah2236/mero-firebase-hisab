@@ -15,7 +15,15 @@ export default function HomeLayout() {
       animationTypeForReplace: Platform.OS === 'android' ? 'pop' : 'push', // Android-specific replace behavior
     }}>
       <Stack.Screen name="index" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
-      <Stack.Screen name="dashboard" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
+      <Stack.Screen 
+        name="dashboard" 
+        options={{ 
+          headerShown: false, 
+          headerTitle: 'Home', 
+          title: 'Home',
+          gestureEnabled: false, // Disable swipe gestures on dashboard - it's the root screen
+        }} 
+      />
       <Stack.Screen name="add-loan" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
       <Stack.Screen name="add-customer" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />
       <Stack.Screen name="customer-form" options={{ headerShown: false, headerTitle: 'Home', title: 'Home' }} />

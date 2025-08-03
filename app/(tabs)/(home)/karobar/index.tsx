@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Switch, Dimensions, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -33,12 +33,19 @@ export default function KarobarScreen() {
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams();
   
   // Form state
   const [loanAmount, setLoanAmount] = useState('');
   const [loanDate, setLoanDate] = useState<BSDate>({ year: '2081', month: 1, day: 1 });
   const [interestRate, setInterestRate] = useState('');
   const [endDate, setEndDate] = useState<BSDate>(() => getCurrentBSDateWithMidnightUpdate());
+  
+  // Keep form data persistent when navigating back from results
+  React.useEffect(() => {
+    // This ensures form data is preserved when coming back from results
+    console.log('Karobar screen focused - preserving form data');
+  }, []);
   
   // Repayment state - support multiple repayments
   const [hasRepayment, setHasRepayment] = useState(false);

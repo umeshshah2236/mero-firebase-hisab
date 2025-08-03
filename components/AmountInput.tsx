@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { convertToNepaliNumerals, convertToEnglishNumerals } from '@/utils/number-utils';
+import DoneInputBar, { useDoneInputBar } from './DoneInputBar';
 
 interface AmountInputProps {
   value: string;
@@ -23,6 +24,7 @@ export default function AmountInput({
   const { language } = useLanguage();
   const { theme, isDark } = useTheme();
   const inputRef = useRef<TextInput>(null);
+  const { inputAccessoryViewID } = useDoneInputBar();
   
   const handleChangeText = (text: string) => {
     // Convert Nepali numerals to English for processing
@@ -102,6 +104,7 @@ export default function AmountInput({
               placeholderTextColor={placeholderTextColor}
               returnKeyType="done"
               blurOnSubmit={true}
+              inputAccessoryViewID={inputAccessoryViewID}
               // Improved touch sensitivity
               editable={true}
               contextMenuHidden={false}
@@ -141,6 +144,7 @@ export default function AmountInput({
               placeholderTextColor={placeholderTextColor}
               returnKeyType="done"
               blurOnSubmit={true}
+              inputAccessoryViewID={inputAccessoryViewID}
               // Improved touch sensitivity
               editable={true}
               contextMenuHidden={false}
@@ -166,6 +170,9 @@ export default function AmountInput({
         )}
       </View>
       {error ? <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text> : null}
+      
+      {/* Done Bar (iOS only - Android uses built-in keyboard dismiss) */}
+      <DoneInputBar inputAccessoryViewID={inputAccessoryViewID} />
     </View>
   );
 }

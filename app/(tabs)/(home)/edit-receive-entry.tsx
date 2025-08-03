@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, TextInput, ScrollView, Platform, Alert, SafeAreaView, KeyboardAvoidingView } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Platform, Alert, SafeAreaView, KeyboardAvoidingView } from 'react-native';
+import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Save, TrendingDown, Trash2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -314,7 +315,7 @@ export default function EditReceiveEntryScreen() {
             <View style={styles.sectionContainer}>
               <View style={styles.modernInputGroup}>
                 <Text style={[styles.modernLabel, { color: theme.colors.text }]}>{t('descriptionItemsNotes')}</Text>
-                <TextInput
+                                    <TextInputWithDoneBar
                   style={[
                     styles.modernTextInput,
                     {
@@ -338,7 +339,7 @@ export default function EditReceiveEntryScreen() {
             <View style={styles.sectionContainer}>
               <View style={styles.modernInputGroup}>
                 <Text style={[styles.modernLabel, { color: theme.colors.text }]}>{t('customerName')}</Text>
-                <TextInput
+                                    <TextInputWithDoneBar
                   style={[
                     styles.modernTextInput,
                     styles.lockedInput,
