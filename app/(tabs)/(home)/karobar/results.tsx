@@ -31,10 +31,13 @@ const getResponsivePadding = () => {
 };
 
 const getResponsiveFontSize = (base: number) => {
-  if (isSmallScreen) return base - 2;
-  if (isMediumScreen) return base;
-  if (isExtraLargeScreen) return base + 2;
-  return base;
+  // Extra large fonts for iOS to help older users
+  const iosBonus = Platform.OS === 'ios' ? 4 : 0;
+  
+  if (isSmallScreen) return base - 2 + iosBonus;
+  if (isMediumScreen) return base + iosBonus;
+  if (isExtraLargeScreen) return base + 2 + iosBonus;
+  return base + iosBonus;
 };
 
 export default function KarobarResultsScreen() {
@@ -591,7 +594,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   breakdownItemCard: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
     borderRadius: getResponsiveSize(8, 12, 16),
     padding: getResponsiveSize(8, 12, 16),
     marginBottom: getResponsiveSize(6, 8, 10),
@@ -720,7 +723,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   repaymentItem: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderRadius: getResponsiveSize(8, 12, 16),
     padding: getResponsiveSize(12, 16, 20),
     marginBottom: getResponsiveSize(8, 12, 16),
@@ -856,7 +859,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   noteCard: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#FFFFFF',
     borderRadius: getResponsiveSize(8, 12, 16),
     padding: getResponsiveSize(16, 20, 24),
     marginBottom: getResponsiveSize(20, 24, 28),

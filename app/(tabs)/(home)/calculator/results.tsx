@@ -1,12 +1,12 @@
 import React from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Platform, InteractionManager } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useTheme } from '@/contexts/ThemeContext';
+
 import { formatLocalizedCurrency, formatNumber } from '@/utils/number-utils';
 import { ArrowLeft } from 'lucide-react-native';
 
@@ -19,9 +19,12 @@ const isLargeScreen = width >= 414;
 
 // Larger font sizes for better readability, especially for older users
 const getResponsiveSize = (small: number, medium: number, large: number) => {
-  if (isSmallScreen) return small + 3; // Significantly larger fonts
-  if (isMediumScreen) return medium + 3;
-  return large + 3;
+  // Extra large fonts for iOS to help older users
+  const iosBonus = Platform.OS === 'ios' ? 4 : 0;
+  
+  if (isSmallScreen) return small + 3 + iosBonus; // Significantly larger fonts for iOS
+  if (isMediumScreen) return medium + 3 + iosBonus;
+  return large + 3 + iosBonus;
 };
 
 // Compact spacing to maximize screen usage
@@ -40,7 +43,7 @@ const getLineHeight = (baseFontSize: number, language: string) => {
 
 export default React.memo(function ResultsScreen() {
   const { t, language } = useLanguage();
-  const { theme } = useTheme();
+
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   
@@ -116,15 +119,14 @@ export default React.memo(function ResultsScreen() {
     // If this is a customer interest calculation, go back to customer detail page
     if (isCustomerInterest && customerName) {
       if (Platform.OS === 'android') {
-        // For Android: Clear calculator stack and navigate to customer detail for clean navigation
-        router.dismissAll();
-        // Small delay to ensure dismissAll completes before navigation
-        setTimeout(() => {
+        // For Android: Use InteractionManager for smooth navigation
+        InteractionManager.runAfterInteractions(() => {
+          router.dismissAll();
           router.push({
             pathname: '/(tabs)/(home)/customer-detail',
             params: { customerName }
           });
-        }, 50);
+        });
       } else {
         // For iOS: Simple navigation works fine
         router.push({
@@ -135,8 +137,15 @@ export default React.memo(function ResultsScreen() {
       return;
     }
     
-    // For regular calculator flow - use simple back navigation
-    router.back();
+    // For regular calculator flow - use Android-optimized back navigation
+    if (Platform.OS === 'android') {
+      InteractionManager.runAfterInteractions(() => {
+        router.back();
+      });
+    } else {
+      // iOS: Direct back navigation
+      router.back();
+    }
   };
 
   const getLocalizedMonthName = (monthIndex: number) => {
@@ -248,7 +257,7 @@ export default React.memo(function ResultsScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background || '#F8FAFC' }]}>
+            <View style={[styles.container, { backgroundColor: '#F8FAFC' }]}>
       {/* Compact Header with Back Button */}
       <View style={[styles.simpleHeader, { paddingTop: insets.top + getCompactSpacing(6, 8, 10) }]}>
         <TouchableOpacity style={styles.backIconButton} onPress={handleGoBack}>
@@ -270,15 +279,15 @@ export default React.memo(function ResultsScreen() {
         </View>
       </View>
 
-      <ScrollView 
-        style={[styles.scrollContainer, { backgroundColor: theme.colors.background || '#F8FAFC' }]} 
+            <ScrollView 
+        style={[styles.scrollContainer, { backgroundColor: '#F8FAFC' }]} 
         contentContainerStyle={[styles.contentContainer, {
           paddingBottom: getCompactSpacing(20, 24, 28),
         }]}>
         <View style={[styles.resultsContainer, {
           paddingHorizontal: getCompactSpacing(12, 16, 20),
           paddingTop: getCompactSpacing(8, 12, 16),
-          backgroundColor: theme.colors.background || '#F8FAFC',
+                        backgroundColor: '#FFFFFF',
         }]}>
           {isCustomerInterest ? (
             /* Customer Interest Calculation Results */
@@ -420,17 +429,7 @@ export default React.memo(function ResultsScreen() {
           ) : (
             /* Regular Interest Calculation Results */
             <>
-              {/* Explanation for regular calculation */}
-              <Text style={[styles.explanationText, {
-                fontSize: getResponsiveSize(12, 13, 14),
-                color: '#64748B',
-                textAlign: 'center',
-                marginBottom: getCompactSpacing(12, 14, 16),
-                fontWeight: '500',
-                paddingHorizontal: getCompactSpacing(16, 20, 24),
-              }]}>
-                {t('simpleInterestExplanation') || 'Simple interest calculation for the specified time period:'}
-              </Text>
+
               
               {/* Total Interest - Highlighted - MOVED TO TOP */}
               <View style={[styles.highlightCard, {
@@ -471,12 +470,13 @@ export default React.memo(function ResultsScreen() {
                 
                 {/* Calculation Formula */}
                 <Text style={[styles.explanationText, {
-                  fontSize: getResponsiveSize(10, 11, 12),
-                  color: 'rgba(255, 255, 255, 0.8)',
+                  fontSize: getResponsiveSize(14, 16, 18), // Increased from 10,11,12 for better visibility
+                  color: 'rgba(255, 255, 255, 0.95)', // Increased opacity from 0.8 for better contrast
                   textAlign: 'center',
                   marginTop: getCompactSpacing(8, 10, 12),
-                  fontWeight: '500',
-                  lineHeight: 16,
+                  fontWeight: '600', // Increased from 500 for bolder text
+                  lineHeight: getLineHeight(getResponsiveSize(14, 16, 18), language), // Dynamic line height for Nepali
+                  paddingHorizontal: getCompactSpacing(8, 12, 16), // Added padding to prevent clipping
                 }]}>
                   {formatLocalizedCurrency(principal, language)} + {formatLocalizedCurrency(totalInterest, language)} = {formatLocalizedCurrency(finalAmount, language)}
                 </Text>
@@ -766,7 +766,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   breakdownItemCard: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 12,
     marginBottom: 4,
@@ -840,7 +840,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   noteCard: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 20,
     marginBottom: 24,

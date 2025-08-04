@@ -6,31 +6,72 @@ export default function CalculatorLayout() {
   return (
     <Stack screenOptions={{ 
       headerShown: false,
-      gestureEnabled: true,
+      gestureEnabled: Platform.OS === 'ios', // Disable gestures on Android
       gestureDirection: 'horizontal',
-      animation: 'slide_from_right', // Forward navigation - slide from right  
-      animationDuration: Platform.OS === 'android' ? 250 : 300, // Slightly faster on Android
-      animationTypeForReplace: Platform.OS === 'android' ? 'push' : 'push',
+      animation: Platform.OS === 'android' ? 'none' : 'slide_from_right', // No animation on Android
+      animationDuration: Platform.OS === 'android' ? 200 : 300, // Faster Android transitions
+      animationTypeForReplace: 'push', // Consistent across platforms
+      // CRITICAL: Android background to eliminate white flash during slide transitions
+      contentStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+      cardStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+      // CRITICAL: Custom Android interpolator to show calculator content during back animation
+      ...(Platform.OS === 'android' && {
+        cardStyleInterpolator: ({ current }) => {
+          return {
+            cardStyle: {
+              backgroundColor: '#0F172A',
+              opacity: 1, // Always opaque - no fade effects
+            },
+          };
+        },
+      }),
     }}>
       <Stack.Screen 
         name="index" 
         options={{ 
           headerShown: false,
-          // Android-specific: VERY different animation when coming back to index
+          // CRITICAL: Android background to prevent white flash 
+          contentStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+          cardStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+          // No animation on Android for consistency
+          animation: Platform.OS === 'android' ? 'none' : 'slide_from_right',
+          animationDuration: Platform.OS === 'android' ? 200 : 300,
+          // CRITICAL: Simple background animation to prevent white flash
           ...(Platform.OS === 'android' && {
-            animation: 'slide_from_bottom', // Dramatic upward slide for Android backward
-            animationDuration: 400, // Slightly longer to make it more noticeable
+            cardStyleInterpolator: ({ current }) => {
+              return {
+                cardStyle: {
+                  backgroundColor: '#0F172A',
+                  opacity: 1, // Always opaque
+                },
+              };
+            },
           }),
         }} 
       />
       <Stack.Screen name="results" options={{ 
         headerShown: false, 
         presentation: 'card',
-        gestureEnabled: true,
+        gestureEnabled: Platform.OS === 'ios', // Disable gestures on Android
         gestureDirection: 'horizontal',
-        animation: 'slide_from_right', // Forward: Calculator → Results
-        animationDuration: Platform.OS === 'android' ? 250 : 300, // Slightly faster on Android
-        animationTypeForReplace: Platform.OS === 'android' ? 'pop' : 'push', // Pop for Android backward
+        // CRITICAL: Android background to prevent white flash 
+        contentStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+        cardStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+        // No animation on Android for consistency
+        animation: Platform.OS === 'android' ? 'none' : 'slide_from_right',
+        animationDuration: Platform.OS === 'android' ? 200 : 300, // Faster Android transitions
+        animationTypeForReplace: 'push', // Consistent across platforms
+        // CRITICAL: Simple background animation to prevent white flash
+        ...(Platform.OS === 'android' && {
+          cardStyleInterpolator: ({ current }) => {
+            return {
+              cardStyle: {
+                backgroundColor: '#0F172A',
+                opacity: 1, // Always opaque
+              },
+            };
+          },
+        }),
       }} />
     </Stack>
   );

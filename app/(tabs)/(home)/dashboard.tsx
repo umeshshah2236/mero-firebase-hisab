@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Dimensions, RefreshControl, SafeAreaView, Animated, Linking, InteractionManager } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Dimensions, RefreshControl, SafeAreaView, Animated, Linking, InteractionManager, Platform } from 'react-native';
 import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { Plus, User, Users, Search, TrendingUp, TrendingDown, Clock, Phone, MessageCircle, Heart } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -46,22 +45,17 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('customers');
   const [searchQuery, setSearchQuery] = useState('');
   // CRITICAL FIX: Initialize with context data immediately (like statement page initialTransactions)
-  const [transactionEntries, setTransactionEntries] = useState<TransactionEntry[]>(() => {
-    // Try to get initial data from context (like statement page getCachedTransactions)
-    console.log('🚀 Dashboard: Initializing with immediate context data');
-    return []; // Will be populated immediately by useEffect
-  });
+  const [transactionEntries, setTransactionEntries] = useState<TransactionEntry[]>([]);
   const [isScreenFocused, setIsScreenFocused] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Redirect to home if user is not authenticated - optimized for smooth transitions
   useEffect(() => {
     if (!authLoading && !isAuthenticated && !hasRedirected) {
-      console.log('Dashboard: User not authenticated, redirecting to home');
       setHasRedirected(true);
       router.replace('/(tabs)/(home)');
     } else if (!authLoading && isAuthenticated && hasRedirected) {
-      console.log('Dashboard: User authenticated, resetting redirect flag');
       setHasRedirected(false);
     }
   }, [isAuthenticated, authLoading, hasRedirected]);
@@ -79,8 +73,6 @@ const DashboardScreen = React.memo(function DashboardScreen() {
 
   // STATEMENT PAGE APPROACH: Simple data refresh
   const handleDataRefresh = React.useCallback(async () => {
-    console.log('Dashboard: Refreshing data (statement page approach)');
-    
     try {
       if (user) {
         const [allTransactions] = await Promise.all([
@@ -89,12 +81,35 @@ const DashboardScreen = React.memo(function DashboardScreen() {
         ]);
         
         setTransactionEntries(allTransactions);
-        console.log('Dashboard: Data refreshed successfully');
       }
     } catch (error) {
       console.error('Dashboard: Error refreshing data:', error);
     }
   }, [user, getAllTransactionEntries, fetchCustomers]);
+
+  // Silent data refresh that doesn't trigger loading states
+  const handleSilentRefresh = React.useCallback(async () => {
+    try {
+      if (user) {
+        // Check if we have fresh cached data first
+        const cachedData = (globalThis as any).__latestTransactionData;
+        if (cachedData && (Date.now() - cachedData.updatedAt) < 5000) { // Use cache if less than 5 seconds old
+          console.log('Dashboard: Using real-time cached transaction data');
+          setTransactionEntries(cachedData.transactions);
+          return;
+        }
+        
+        // Get fresh data silently without triggering global loading states
+        const allTransactions = await getAllTransactionEntries();
+        setTransactionEntries(allTransactions);
+        
+        // Skip customer refresh to avoid loading loops - customers are less likely to change
+        // The main calculation (TO RECEIVE/TO GIVE) depends on transaction entries which we just updated
+      }
+    } catch (error) {
+      console.error('Dashboard: Error in silent refresh:', error);
+    }
+  }, [user, getAllTransactionEntries]);
 
 
 
@@ -104,37 +119,45 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   // FIXED: Only refresh data on initial focus, not every time
   useFocusEffect(
     React.useCallback(() => {
-      console.log('Dashboard: Screen focused - checking if data refresh needed');
       setIsScreenFocused(true);
       
       // Check if forced refresh is required (after customer deletion)
       if ((globalThis as any).__forceRefreshDashboard) {
-        console.log('🔄 Dashboard: Force refresh requested after customer deletion');
         delete (globalThis as any).__forceRefreshDashboard;
         
         // CRITICAL: Clear all state and force complete reload
-        console.log('🧹 Dashboard: Clearing all local state before refresh');
         setTransactionEntries([]);
         
         // Force a complete data refresh
         handleDataRefresh();
         return () => {
-          console.log('Dashboard: Screen unfocused');
           setIsScreenFocused(false);
         };
       }
       
-      // Only refresh if we don't have data yet (like statement page approach)
+      // Check if data refresh is needed (when coming back from pages that modify data)
+      if ((globalThis as any).__needsDataRefresh) {
+        delete (globalThis as any).__needsDataRefresh;
+        if (user && !transactionLoading && !customersLoading) {
+          handleSilentRefresh();
+        }
+        return () => {
+          setIsScreenFocused(false);
+        };
+      }
+      
+      // Only refresh if we don't have data yet
       if (transactionEntries.length === 0 && user && !transactionLoading && !customersLoading) {
-        console.log('Dashboard: No data yet, refreshing...');
         handleDataRefresh();
-      } else {
-        console.log('Dashboard: Data already available, skipping refresh');
       }
 
       return () => {
-        console.log('Dashboard: Screen unfocused');
         setIsScreenFocused(false);
+        // Clear timeout on cleanup
+        if (refreshTimeoutRef.current) {
+          clearTimeout(refreshTimeoutRef.current);
+          refreshTimeoutRef.current = null;
+        }
       };
     }, [transactionEntries.length, user, transactionLoading, customersLoading, handleDataRefresh])
   );
@@ -169,44 +192,29 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   };
 
   // 🚀 CUSTOMER DETAIL APPROACH: Manual refresh for pull-to-refresh
-  const handleRefresh = async (forceRefresh: boolean = false) => {
-    console.log('Dashboard: handleRefresh called (CUSTOMER DETAIL APPROACH), forceRefresh:', forceRefresh);
-    
+  const handleRefresh = React.useCallback(async (forceRefresh: boolean = false) => {
     // Only show refreshing state for pull-to-refresh, not background refreshes
     if (forceRefresh) {
       setRefreshing(true);
     }
     
     try {
-      console.log('Dashboard: Starting data refresh...');
-      
       // Check if we need to refresh the session first
       if (transactionError && transactionError.includes('session has expired')) {
-        console.log('Dashboard: Refreshing session...');
         const sessionRefreshResult = await refreshSession();
         if (!sessionRefreshResult.success) {
-          console.log('Dashboard: Session refresh failed');
           return;
         }
       }
       
       // Always refresh data silently in background
-      console.log('Dashboard: Fetching customers and transactions...');
       const [customersResult, transactionsResult] = await Promise.all([
         fetchCustomers(true),
         getAllTransactionEntries()
       ]);
       
-      console.log('Dashboard: Manual refresh data fetched successfully');
-      console.log('Dashboard: Customers count:', Array.isArray(customersResult) ? customersResult.length : 0);
-      console.log('Dashboard: Transactions count:', Array.isArray(transactionsResult) ? transactionsResult.length : 0);
-      
       // Update transaction entries state and force update
       setTransactionEntries(transactionsResult || []);
-      
-      // Force update counter to trigger re-calculation
-      // Data refreshed successfully
-      console.log('🔄 Manual refresh completed, forcing UI update');
     } catch (error) {
       console.error('Dashboard: Error refreshing data:', error);
       // Handle errors silently for background refreshes
@@ -215,33 +223,14 @@ const DashboardScreen = React.memo(function DashboardScreen() {
         setRefreshing(false);
       }
     }
-  };
+  }, [transactionError, refreshSession, fetchCustomers, getAllTransactionEntries]);
 
 
 
 
 
-  // Create customer summaries combining database customers with transaction data - OPTIMIZED
-  const getCustomerSummaries = React.useCallback((): PersonSummary[] => {
-    console.log('Dashboard: Calculating FAST customer summaries');
-    console.log('Customers loaded:', customers.length);
-    console.log('Transactions loaded:', transactionEntries.length);
-    console.log('🐛 DEBUG - Customers context loading state:', customersLoading);
-    console.log('🐛 DEBUG - Transactions context loading state:', transactionLoading);
-    
-    // CRITICAL DEBUG: Log all customer names for deletion debugging
-    console.log('🔍 CURRENT CUSTOMERS IN DATABASE:', customers.map(c => c.name));
-    console.log('🔍 CURRENT TRANSACTION CUSTOMER NAMES:', [...new Set(transactionEntries.map(t => t.customer_name))]);
-    
-    // Log some sample transaction data for debugging
-    if (transactionEntries.length > 0) {
-      console.log('Sample transactions:', transactionEntries.slice(0, 3).map(t => ({
-        customer_name: t.customer_name,
-        amount: t.amount,
-        type: t.transaction_type,
-        date: t.transaction_date
-      })));
-    }
+  // Create customer summaries combining database customers with transaction data - MEMOIZED
+  const customerSummaries = React.useMemo((): PersonSummary[] => {
     
     const customerMap = new Map<string, PersonSummary>();
     
@@ -259,13 +248,6 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     
     // Then, process all transaction entries for balance calculation
     transactionEntries.forEach((transaction: TransactionEntry) => {
-      console.log('Processing transaction:', {
-        customer_name: transaction.customer_name,
-        amount: transaction.amount,
-        type: transaction.transaction_type,
-        balance_impact: transaction.transaction_type === 'given' ? transaction.amount : -transaction.amount
-      });
-      
       const existing = customerMap.get(transaction.customer_name);
       const balanceImpact = transaction.transaction_type === 'given'
         ? transaction.amount
@@ -280,12 +262,6 @@ const DashboardScreen = React.memo(function DashboardScreen() {
           existing.lastTransactionDate = transactionUpdatedAt;
         }
         existing.status = existing.netBalance !== 0 ? 'active' : 'settled';
-        
-        console.log('Updated customer balance:', {
-          name: existing.name,
-          net_balance: existing.netBalance,
-          status: existing.status
-        });
       } else {
         // Customer not in database but has transactions - add them
         customerMap.set(transaction.customer_name, {
@@ -296,12 +272,6 @@ const DashboardScreen = React.memo(function DashboardScreen() {
           lastTransactionDate: transaction.updated_at || transaction.transaction_date,
           status: balanceImpact !== 0 ? 'active' : 'settled',
         });
-        
-        console.log('Added new customer from transaction:', {
-          name: transaction.customer_name,
-          net_balance: balanceImpact,
-          status: balanceImpact !== 0 ? 'active' : 'settled'
-        });
       }
     });
     
@@ -310,14 +280,12 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     const validCustomers = Array.from(customerMap.values()).filter(customer => {
       // Filter out explicitly deleted customer
       if (deletedCustomerName && customer.name.toLowerCase().trim() === deletedCustomerName.toLowerCase().trim()) {
-        console.log('🗑️ FILTERING OUT explicitly deleted customer:', customer.name);
         return false;
       }
       
       // Only include customers that have actual transactions
       const hasTransactions = customer.transactionCount > 0;
       if (!hasTransactions) {
-        console.log('🗑️ FILTERING OUT customer with no transactions:', customer.name);
         return false;
       }
       
@@ -326,11 +294,8 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     
     // Clear the deleted customer flag after first use
     if (deletedCustomerName) {
-      console.log('🧹 Clearing deleted customer flag for:', deletedCustomerName);
       delete (globalThis as any).__deletedCustomerName;
     }
-    
-    console.log('📊 FINAL CUSTOMER LIST:', validCustomers.map(c => ({ name: c.name, balance: c.netBalance, transactions: c.transactionCount })));
     
     return validCustomers.sort((a, b) => {
       // Sort by most recent transaction/update time first (most recent first)
@@ -359,37 +324,23 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     });
   }, [customers, transactionEntries, customersLoading, transactionLoading]);
 
-  // Filter function for search
-  const filterPersons = (persons: PersonSummary[], query: string): PersonSummary[] => {
-    if (!query.trim()) return persons;
-    return persons.filter(person => 
-      person.name.toLowerCase().includes(query.toLowerCase())
-    );
-  };
-
-
-
-  // STATEMENT PAGE APPROACH: Simple direct calculation
-  const allCustomers = React.useMemo(() => {
-    console.log('🔄 Calculating customer summaries (statement page approach)');
-    return getCustomerSummaries();
-  }, [getCustomerSummaries]);
+  // Debounced search query to prevent excessive re-renders
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   
+  // Debounce search query updates
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 150); // Debounce by 150ms for smooth typing
+    
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
-  
-  // Don't render content if user is not authenticated or still loading - but provide background to prevent white page
-  if (authLoading || !isAuthenticated) {
-    return (
-      <View style={[{ backgroundColor: theme.colors.background, flex: 1 }]} />
-    );
-  }
-  
-  const filteredCustomers = filterPersons(allCustomers, searchQuery);
-
-  // REMOVED: handlePersonPress function to eliminate any callback delays
-  // Navigation is now direct in onPress for maximum speed
+  // STATEMENT PAGE APPROACH: Simple direct calculation using memoized value
+  const allCustomers = customerSummaries;
 
   // CRITICAL FIX: Create missing customers to fix data inconsistency
+  // MOVED BEFORE EARLY RETURN TO FIX HOOK ORDERING
   const fixMissingCustomers = useCallback(async () => {
     if (!user || customersLoading || transactionLoading || transactionEntries.length === 0) {
       return;
@@ -437,6 +388,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   }, [user, customers, transactionEntries, customersLoading, transactionLoading, addCustomer, fetchCustomers]);
 
   // CRITICAL FIX: Run data consistency check when data is loaded
+  // MOVED BEFORE EARLY RETURN TO FIX HOOK ORDERING
   useEffect(() => {
     if (!customersLoading && !transactionLoading && user && transactionEntries.length > 0 && customers.length > 0) {
       // Run the fix after a short delay to ensure all data is settled
@@ -447,6 +399,30 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       return () => clearTimeout(timeoutId);
     }
   }, [customersLoading, transactionLoading, user, transactionEntries.length, customers.length, fixMissingCustomers]);
+
+  // Memoized filter function for better performance
+  const filteredCustomers = React.useMemo(() => {
+    if (!debouncedSearchQuery.trim()) return allCustomers;
+    return allCustomers.filter(person => 
+      person.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+    );
+  }, [allCustomers, debouncedSearchQuery]);
+  
+
+  
+  // Don't render content if user is not authenticated or still loading - Android-specific background
+  if (authLoading || !isAuthenticated) {
+    return (
+      <View style={[{ 
+        backgroundColor: Platform.OS === 'android' ? '#0F172A' : theme.colors.background, 
+        flex: 1 
+      }]} />
+    );
+  }
+
+
+  // REMOVED: handlePersonPress function to eliminate any callback delays
+  // Navigation is now direct in onPress for maximum speed
 
 
 
@@ -477,9 +453,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     currentStatus = netBalance > 0 ? t('toReceive') : netBalance < 0 ? t('toGive') : 
                    (toReceive === 0 && toGive === 0) ? t('allSettled') : '';
     
-    console.log('Dashboard: Calculated with real data:', { toReceive, toGive, netBalance, displayAmount, customersCount: allCustomers.length });
-  } else {
-    console.log('Dashboard: No data yet - showing empty state');
+
   }
 
   // Get initials for avatar
@@ -511,50 +485,56 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     };
     
     return (
-      <TouchableOpacity
-        style={[styles.premiumPersonCard, { 
-          backgroundColor: getTransparentBackgroundColor(),
-          borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
-          shadowColor: isDark ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.08)',
-        }]}
+      <View style={{ position: 'relative' }}>
+        <TouchableOpacity
+          style={[styles.premiumPersonCard, { 
+            backgroundColor: getTransparentBackgroundColor(),
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
+            shadowColor: isDark ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.08)',
+          }]}
 
-        onPress={() => {
-          const startTime = Date.now();
-          console.log('🚀 Touch detected, starting navigation...');
-          
-          // INSTANT: Navigation first - absolute priority
-          router.push({
-            pathname: '/(tabs)/(home)/customer-detail',
-            params: {
-              customerName: person.name,
-              customerPhone: person.name,
+          onPress={() => {
+            // Android-specific: Use InteractionManager for smooth transitions
+            if (Platform.OS === 'android') {
+              InteractionManager.runAfterInteractions(() => {
+                router.push({
+                  pathname: '/(tabs)/(home)/customer-detail',
+                  params: {
+                    customerName: person.name,
+                    customerPhone: person.name,
+                  }
+                });
+              });
+            } else {
+              // iOS: Direct navigation
+              router.push({
+                pathname: '/(tabs)/(home)/customer-detail',
+                params: {
+                  customerName: person.name,
+                  customerPhone: person.name,
+                }
+              });
             }
-          });
-          
-          const navTime = Date.now() - startTime;
-          console.log(`✅ Navigation called after ${navTime}ms`);
-          
-          // Haptic feedback after navigation starts
-          if (Platform.OS !== 'web') {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          }
-          
-          // Cache data after navigation (non-blocking)
-          setTimeout(() => {
+            
+            // Immediate haptic feedback
+            if (Platform.OS !== 'web') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }
+            
+            // Pre-cache data immediately (non-blocking)
             const customerTransactions = transactionEntries.filter(t => t.customer_name === person.name);
             (globalThis as any).__customerDetailCache = {
               customerName: person.name,
               transactions: customerTransactions,
               cachedAt: Date.now()
             };
-          }, 0);
-        }}
-        activeOpacity={0.2}
-        hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
-        pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
-        delayPressIn={0}
-        delayPressOut={0}
-      >
+          }}
+          activeOpacity={0.2}
+          hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+          pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
+          delayPressIn={0}
+          delayPressOut={0}
+        >
         <LinearGradient
           colors={isDark 
             ? isPositiveBalance 
@@ -608,78 +588,89 @@ const DashboardScreen = React.memo(function DashboardScreen() {
               </View>
               
               <View style={styles.rightSection}>
-                <Text style={[styles.premiumAmountText, { color: balanceColor }]}>
+                <Text style={[styles.premiumAmountText, { color: balanceColor, marginBottom: 8 }]}>
                   रु{' '}{Math.abs(person.netBalance).toLocaleString('en-IN')}
                 </Text>
-                <TouchableOpacity 
-                  style={[styles.premiumCallButton, {
-                    backgroundColor: hasPhoneNumber 
-                      ? (isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.08)')
-                      : (isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.08)'),
-                    borderColor: hasPhoneNumber 
-                      ? (isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)')
-                      : (isDark ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)')
-                  }]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    // INSTANT haptic feedback for maximum responsiveness
-                    if (Platform.OS !== 'web') {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }
-                    
-                    if (hasPhoneNumber) {
-                      // Make actual phone call directly
-                      const phoneNumber = customerData?.phone;
-                      if (phoneNumber) {
-                        try {
-                          // Open phone dialer directly
-                          const cleanPhone = phoneNumber.replace(/[^+\d]/g, '');
-                          const phoneUrl = `tel:${cleanPhone}`;
-
-                          Linking.openURL(phoneUrl).catch((err) => {
-                            Alert.alert('Error', 'Could not open phone dialer');
-                          });
-                        } catch (error) {
-                          Alert.alert('Error', 'Could not make phone call');
-                        }
-                      }
-                    } else {
-                      // Navigate to customer form to add phone number
-                      router.push({
-                        pathname: '/(tabs)/(home)/customer-form',
-                        params: {
-                          editMode: 'true',
-                          customerId: customerData?.id || '',
-                          customerName: person.name,
-                          customerPhone: customerData?.phone || '',
-                          focusPhone: 'true' // Indicate that we want to focus on phone field
-                        }
-                      });
-                    }
-                  }}
-                  activeOpacity={0.2}
-                  hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
-                  pressRetentionOffset={{ top: 20, bottom: 20, left: 20, right: 20 }}
-                  delayPressIn={0}
-                  delayPressOut={0}
-                >
-                  {hasPhoneNumber ? (
-                    <>
-                      <Phone size={14} color="#3B82F6" />
-                      <Text style={[styles.premiumCallText, { color: '#3B82F6' }]}>{t('call')}</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Phone size={14} color="#10B981" />
-                      <Text style={[styles.premiumCallText, { color: '#10B981' }]}>{t('add')}</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                {/* Placeholder space for the button */}
+                <View style={{ height: 24, width: 60 }} />
               </View>
             </View>
           </View>
         </LinearGradient>
       </TouchableOpacity>
+
+      {/* Call/Add Button - Positioned outside the TouchableOpacity */}
+      <TouchableOpacity 
+        style={[
+          styles.premiumCallButton, 
+          {
+            position: 'absolute',
+            bottom: 8, // Position lower - moved from 16 to 8
+            right: 16,
+            zIndex: 10,
+            backgroundColor: hasPhoneNumber 
+              ? (isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.08)')
+              : (isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.08)'),
+            borderColor: hasPhoneNumber 
+              ? (isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)')
+              : (isDark ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)')
+          }
+        ]}
+        onPress={() => {
+          // INSTANT haptic feedback for maximum responsiveness
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          
+          if (hasPhoneNumber) {
+            // Make actual phone call directly
+            const phoneNumber = customerData?.phone;
+            if (phoneNumber) {
+              try {
+                // Open phone dialer directly
+                const cleanPhone = phoneNumber.replace(/[^+\d]/g, '');
+                const phoneUrl = `tel:${cleanPhone}`;
+
+                Linking.openURL(phoneUrl).catch((err) => {
+                  Alert.alert(t('error'), t('couldNotOpenPhoneDialer'));
+                });
+              } catch (error) {
+                Alert.alert(t('error'), t('couldNotMakePhoneCall'));
+              }
+            }
+          } else {
+            // Navigate to customer form to add phone number
+            router.push({
+              pathname: '/(tabs)/(home)/customer-form',
+              params: {
+                editMode: 'true',
+                customerId: customerData?.id || '',
+                customerName: person.name,
+                customerPhone: customerData?.phone || '',
+                focusPhone: 'true' // Indicate that we want to focus on phone field
+              }
+            });
+          }
+        }}
+        activeOpacity={0.2}
+        hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
+        pressRetentionOffset={{ top: 20, bottom: 20, left: 20, right: 20 }}
+        delayPressIn={0}
+        delayPressOut={0}
+      >
+        {hasPhoneNumber ? (
+          <>
+            <Phone size={14} color="#3B82F6" />
+            <Text style={[styles.premiumCallText, { color: '#3B82F6' }]}>{t('call')}</Text>
+          </>
+        ) : (
+          <>
+            <Phone size={14} color="#10B981" />
+            <Text style={[styles.premiumCallText, { color: '#10B981' }]}>{t('add')}</Text>
+          </>
+        )}
+      </TouchableOpacity>
+      </View>
     );
   });
 
@@ -698,7 +689,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       <View style={[styles.modernFinanceHeader, { 
         paddingTop: Platform.OS === 'ios' ? insets.top + 16 : insets.top + 40, // Increased padding for Android camera area
         backgroundColor: '#1E293B',
-        minHeight: 110 + insets.top,
+                 minHeight: 100 + insets.top,
         marginTop: Platform.OS === 'android' ? -insets.top : 0, // Negative margin to extend behind status bar on Android
       }]}>
         <LinearGradient
@@ -768,25 +759,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
           </View>
         </View>
         
-        {/* Quick Stats Row */}
-        <View style={styles.quickStatsRow}>
-          <View style={styles.quickStatItem}>
-            <Text style={styles.quickStatValue}>{allCustomers.length}</Text>
-            <Text style={styles.quickStatLabel}>{t('customers')}</Text>
-          </View>
-          <View style={styles.quickStatDivider} />
-          <View style={styles.quickStatItem}>
-            <Text style={styles.quickStatValue}>{hasActualData ? allCustomers.filter((c: PersonSummary) => c.status === 'active').length : '---'}</Text>
-            <Text style={styles.quickStatLabel}>{t('active')}</Text>
-          </View>
-          <View style={styles.quickStatDivider} />
-          <View style={styles.quickStatItem}>
-            <Text style={[styles.quickStatValue, { color: '#10B981' }]}>
-              {hasActualData ? `रु ${toReceive.toLocaleString('en-IN')}` : '---'}
-            </Text>
-            <Text style={styles.quickStatLabel}>{t('toReceive')}</Text>
-          </View>
-        </View>
+
       </View>
       
       <SafeAreaView style={[styles.content, { backgroundColor: theme.colors.background }]}>
@@ -841,7 +814,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
 
           {/* Error Display */}
           {(transactionError || customersError) && (
-            <View style={[styles.errorContainer, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+            <View style={[styles.errorContainer, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}>
               <Text style={[styles.errorText, { color: '#DC2626' }]}>
                 {isNetworkError(transactionError || customersError || '') 
                   ? 'Network connection failed. Please check your internet connection and try again.'
@@ -912,7 +885,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                 delayPressOut={0}
               >
                 <LinearGradient
-                  colors={['#6366F1', '#4F46E5', '#4338CA']}
+                  colors={['#3B82F6', '#2563EB', '#1D4ED8']}
                   style={styles.addButtonGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
@@ -1030,7 +1003,7 @@ const styles = StyleSheet.create({
   modernFinanceHeader: {
     position: 'relative',
     paddingHorizontal: Platform.OS === 'android' ? 16 : 20,
-    paddingBottom: Platform.OS === 'android' ? 12 : 16,
+    paddingBottom: Platform.OS === 'android' ? 4 : 6,
     overflow: 'hidden',
     backgroundColor: '#1E293B',
   },
@@ -1081,7 +1054,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 8,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   modernProfileSection: {
     flexDirection: 'row',
@@ -1110,7 +1083,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   modernAvatarText: {
-    fontSize: 18,
+    fontSize: Platform.OS === 'android' ? 18 : 20, // iOS increased by +2px
     fontWeight: '800' as const,
     color: '#FFFFFF',
   },
@@ -1131,13 +1104,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modernGreetingText: {
-    fontSize: Platform.OS === 'android' ? 13 : 15,
+    fontSize: Platform.OS === 'android' ? 13 : 17, // iOS increased from 15 to 17 (+2px)
     color: '#94A3B8',
     fontWeight: '400' as const,
     marginBottom: 2,
   },
   modernProfileName: {
-    fontSize: Platform.OS === 'android' ? 18 : 22,
+    fontSize: Platform.OS === 'android' ? 18 : 24, // iOS increased from 22 to 24 (+2px)
     fontWeight: '600' as const,
     color: '#F8FAFC',
     letterSpacing: 0.3,
@@ -1153,7 +1126,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   modernBalanceLabel: {
-    fontSize: Platform.OS === 'android' ? 12 : 14,
+    fontSize: Platform.OS === 'android' ? 12 : 16, // iOS increased from 14 to 16 (+2px)
     color: '#94A3B8',
     fontWeight: '400' as const,
   },
@@ -1166,7 +1139,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modernBalanceAmount: {
-    fontSize: Platform.OS === 'android' ? 20 : 26,
+    fontSize: Platform.OS === 'android' ? 20 : 28, // iOS increased from 26 to 28 (+2px)
     fontWeight: '700' as const,
     marginBottom: 2,
   },
@@ -1177,41 +1150,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   modernBalanceStatusText: {
-    fontSize: Platform.OS === 'android' ? 11 : 13,
+    fontSize: Platform.OS === 'android' ? 11 : 15, // iOS increased from 13 to 15 (+2px)
     fontWeight: '500' as const,
   },
-  quickStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  quickStatItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  quickStatValue: {
-    fontSize: Platform.OS === 'android' ? 16 : 18,
-    fontWeight: '600' as const,
-    color: '#F8FAFC',
-    marginBottom: 2,
-  },
-  quickStatLabel: {
-    fontSize: Platform.OS === 'android' ? 11 : 13,
-    color: '#94A3B8',
-    fontWeight: '400' as const,
-  },
-  quickStatDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    marginHorizontal: 8,
-  },
+
   // Fixed top section styles
   fixedTopSection: {
     backgroundColor: 'transparent',
@@ -1257,13 +1199,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#EF4444',
   },
   summaryTabTitle: {
-    fontSize: 14,
+    fontSize: Platform.OS === 'android' ? 14 : 16, // iOS increased by +2px
     fontWeight: '500',
     color: 'white',
     marginBottom: 4,
   },
   summaryTabAmount: {
-    fontSize: 18,
+    fontSize: Platform.OS === 'android' ? 18 : 20, // iOS increased by +2px
     fontWeight: '700',
     color: 'white',
   },
@@ -1778,7 +1720,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   premiumInitials: {
-    fontSize: Platform.OS === 'android' ? 12 : 16,
+    fontSize: Platform.OS === 'android' ? 12 : 18, // iOS increased from 16 to 18 (+2px)
     fontWeight: '700' as const,
     color: 'white',
   },
@@ -1786,7 +1728,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   customerName: {
-    fontSize: Platform.OS === 'android' ? 15 : 18,
+    fontSize: Platform.OS === 'android' ? 15 : 20, // iOS increased from 18 to 20 (+2px)
     fontWeight: '500' as const,
     marginBottom: Platform.OS === 'android' ? 2 : 4,
   },
@@ -1805,14 +1747,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   premiumStatusText: {
-    fontSize: Platform.OS === 'android' ? 11 : 13,
+    fontSize: Platform.OS === 'android' ? 11 : 15, // iOS increased from 13 to 15 (+2px)
     fontWeight: '500' as const,
   },
   rightSection: {
     alignItems: 'flex-end',
   },
   premiumAmountText: {
-    fontSize: Platform.OS === 'android' ? 15 : 18,
+    fontSize: Platform.OS === 'android' ? 15 : 20, // iOS increased from 18 to 20 (+2px)
     fontWeight: '600' as const,
     marginBottom: Platform.OS === 'android' ? 2 : 4,
   },
@@ -1826,7 +1768,7 @@ const styles = StyleSheet.create({
     gap: Platform.OS === 'android' ? 2 : 4,
   },
   premiumCallText: {
-    fontSize: Platform.OS === 'android' ? 12 : 14,
+    fontSize: Platform.OS === 'android' ? 12 : 16, // iOS increased from 14 to 16 (+2px)
     fontWeight: '500' as const,
     color: '#3B82F6',
   },
@@ -1871,13 +1813,13 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   summaryCardTitle: {
-    fontSize: Platform.OS === 'android' ? 12 : 13,
+    fontSize: Platform.OS === 'android' ? 12 : 15, // iOS increased from 13 to 15 (+2px)
     fontWeight: '500' as const,
     color: 'rgba(255, 255, 255, 0.9)',
     letterSpacing: 0.3,
   },
   summaryCardAmount: {
-    fontSize: Platform.OS === 'android' ? 18 : 22,
+    fontSize: Platform.OS === 'android' ? 18 : 24, // iOS increased from 22 to 24 (+2px)
     fontWeight: '700' as const,
     color: 'white',
     marginBottom: 3,
@@ -1886,7 +1828,7 @@ const styles = StyleSheet.create({
     // Footer container
   },
   summaryCardSubtext: {
-    fontSize: Platform.OS === 'android' ? 11 : 12,
+    fontSize: Platform.OS === 'android' ? 11 : 14, // iOS increased from 12 to 14 (+2px)
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '400' as const,
   },
@@ -1974,7 +1916,7 @@ const styles = StyleSheet.create({
   },
   premiumSearchInput: {
     flex: 1,
-    fontSize: Platform.OS === 'android' ? 16 : 18,
+    fontSize: Platform.OS === 'android' ? 16 : 20, // iOS increased from 18 to 20 (+2px)
     fontWeight: '400' as const,
     letterSpacing: 0,
   },
@@ -1994,7 +1936,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   premiumAddButtonText: {
-    fontSize: Platform.OS === 'android' ? 14 : 16,
+    fontSize: Platform.OS === 'android' ? 14 : 18, // iOS increased from 16 to 18 (+2px)
     fontWeight: '500' as const,
     color: '#FFFFFF',
   },

@@ -31,7 +31,15 @@
         "WRITE_CONTACTS",
         "android.permission.READ_CONTACTS",
         "android.permission.WRITE_CONTACTS"
-      ]
+      ],
+      "navigationBar": {
+        "backgroundColor": "#0F172A"
+      },
+      "statusBar": {
+        "backgroundColor": "#0F172A",
+        "barStyle": "light-content",
+        "translucent": false
+      }
     },
     "web": {
       "favicon": "./assets/images/favicon.png"

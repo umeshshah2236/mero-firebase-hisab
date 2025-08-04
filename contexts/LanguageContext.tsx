@@ -1,6 +1,6 @@
+import React, { useState, useEffect } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useState, useEffect } from 'react';
 
 export type Language = 'en' | 'ne';
 
@@ -328,6 +328,61 @@ For questions about these terms, please contact us through the App Store.`,
     success: 'Success',
     error: 'Error',
     ok: 'OK',
+    couldNotOpenPhoneDialer: 'Could not open phone dialer',
+    couldNotMakePhoneCall: 'Could not make phone call',
+    pleaseEnterCustomerName: 'Please enter customer name',
+    pleaseUseDifferentPhoneNumber: 'Please use a different phone number or update the existing customer',
+    youMustBeLoggedInToSaveCustomers: 'You must be logged in to save customers',
+    customerNotFound: 'Customer not found',
+    calculationError: 'Error calculating interest',
+    couldNotFindTransactionForEditing: 'Could not find transaction for editing',
+    transactionNotFound: 'Transaction not found',
+    transactionDeletedSuccessfully: 'Transaction deleted successfully',
+    failedToDeleteTransaction: 'Failed to delete transaction',
+    customerNotFoundForEditing: 'Customer not found for editing',
+    customerAndTransactionsDeleted: 'Customer and all related transactions have been permanently deleted',
+    customerDeletedWithTransactions: (customerName: string, transactionCount: number) => `Customer "${customerName}" and all ${transactionCount} related transactions have been permanently deleted.`,
+    failedToDeleteCustomer: 'Failed to delete customer',
+    failedToLoadContacts: 'Failed to load contacts. You can still add customers manually.',
+    validationError: 'Validation Error',
+    pleaseFixErrorsAndTryAgain: 'Please fix the errors and try again',
+    youMustBeLoggedInToAddTransaction: 'You must be logged in to add a transaction',
+    connectionError: 'Connection Error',
+    unableToConnectToDatabase: 'Unable to connect to the database. Please check your internet connection',
+    authenticationError: 'Authentication Error',
+    sessionExpiredPleaseLogIn: 'Your session has expired. Please log in again',
+    errorSavingTransaction: 'Error saving transaction',
+    transaction: 'transaction',
+    transactions: 'transactions',
+    
+    // Sign-in/Authentication
+    welcomeBack: 'Welcome Back',
+    verifyCode: 'Verify Code',
+    signInOrCreateAccount: 'Sign In or Create Account',
+    enterVerificationCodeSentToPhone: 'Enter the verification code sent to your phone',
+    phoneNumber: 'Phone Number',
+    verificationCode: 'Verification Code',
+    sendOTP: 'Send OTP',
+    verifyOTP: 'Verify OTP',
+    resendOTP: 'Resend OTP',
+    noInternetConnection: 'No Internet Connection',
+    pleaseCheckNetworkConnection: 'Please check your network connection and try again',
+    noInternetConnectionCheckNetwork: 'No internet connection. Please check your network and try again.',
+    otpSent: 'OTP Sent',
+    pleaseCheckPhoneForVerificationCode: 'Please check your phone for the verification code. Code expires in 10 minutes.',
+    failedToSendOTP: 'Failed to Send OTP',
+    pleaseTryAgain: 'Please try again.',
+    pleaseEnterThe6DigitOTP: 'Please enter the 6-digit OTP',
+    otpHasExpiredPleaseRequestNewCode: 'OTP has expired. Please request a new code.',
+    verificationFailed: 'Verification Failed',
+    requestNewCode: 'Request New Code',
+    sendingOTP: 'Sending...',
+    sendingOTPButton: 'Sending OTP...',
+    verifyingOTP: 'Verifying...',
+    resendingOTP: 'Resending...',
+    changePhoneNumber: 'Change Phone Number',
+    sendVerificationCode: 'Send Verification Code',
+    forSecuritySendVerificationCode: 'For security, we\'ll send a verification code to your phone number:',
     
     // Customer Form
     editCustomer: 'Edit Customer',
@@ -690,6 +745,61 @@ This app is perfect for financial planning, loan calculations, and investment pr
     success: 'सफलता',
     error: 'त्रुटि',
     ok: 'ठीक छ',
+    couldNotOpenPhoneDialer: 'फोन डायलर खोल्न सकिएन',
+    couldNotMakePhoneCall: 'फोन कल गर्न सकिएन',
+    pleaseEnterCustomerName: 'कृपया ग्राहकको नाम प्रविष्ट गर्नुहोस्',
+    pleaseUseDifferentPhoneNumber: 'कृपया फरक फोन नम्बर प्रयोग गर्नुहोस् वा अवस्थित ग्राहक अपडेट गर्नुहोस्',
+    youMustBeLoggedInToSaveCustomers: 'ग्राहकहरू बचत गर्न तपाईं लग इन हुनुपर्छ',
+    customerNotFound: 'ग्राहक फेला परेन',
+    calculationError: 'ब्याज गणना गर्नमा त्रुटि',
+    couldNotFindTransactionForEditing: 'सम्पादनका लागि लेनदेन फेला पार्न सकिएन',
+    transactionNotFound: 'लेनदेन फेला परेन',
+    transactionDeletedSuccessfully: 'लेनदेन सफलतापूर्वक मेटाइयो',
+    failedToDeleteTransaction: 'लेनदेन मेटाउन असफल',
+    customerNotFoundForEditing: 'सम्पादनका लागि ग्राहक फेला परेन',
+    customerAndTransactionsDeleted: 'ग्राहक र सबै सम्बन्धित लेनदेनहरू स्थायी रूपमा मेटाइएको छ',
+    customerDeletedWithTransactions: (customerName: string, transactionCount: number) => `ग्राहक "${customerName}" र सबै ${transactionCount} सम्बन्धित लेनदेनहरू स्थायी रूपमा मेटाइएको छ।`,
+    failedToDeleteCustomer: 'ग्राहक मेटाउन असफल',
+    failedToLoadContacts: 'सम्पर्कहरू लोड गर्न असफल। तपाईं अझै पनि ग्राहकहरू म्यानुअल रूपमा थप्न सक्नुहुन्छ।',
+    validationError: 'प्रमाणीकरण त्रुटि',
+    pleaseFixErrorsAndTryAgain: 'कृपया त्रुटिहरू ठीक गर्नुहोस् र फेरि प्रयास गर्नुहोस्',
+    youMustBeLoggedInToAddTransaction: 'लेनदेन थप्न तपाईं लग इन हुनुपर्छ',
+    connectionError: 'जडान त्रुटि',
+    unableToConnectToDatabase: 'डाटाबेसमा जडान गर्न असक्षम। कृपया तपाईंको इन्टरनेट जडान जाँच गर्नुहोस्',
+    authenticationError: 'प्रमाणीकरण त्रुटि',
+    sessionExpiredPleaseLogIn: 'तपाईंको सत्र समाप्त भएको छ। कृपया फेरि लग इन गर्नुहोस्',
+    errorSavingTransaction: 'लेनदेन बचत गर्नमा त्रुटि',
+    transaction: 'लेनदेन',
+    transactions: 'लेनदेनहरू',
+    
+    // Sign-in/Authentication
+    welcomeBack: 'स्वागत छ',
+    verifyCode: 'कोड प्रमाणित गर्नुहोस्',
+    signInOrCreateAccount: 'साइन इन गर्नुहोस् वा खाता सिर्जना गर्नुहोस्',
+    enterVerificationCodeSentToPhone: 'तपाईंको फोनमा पठाइएको प्रमाणीकरण कोड प्रविष्ट गर्नुहोस्',
+    phoneNumber: 'फोन नम्बर',
+    verificationCode: 'प्रमाणीकरण कोड',
+    sendOTP: 'OTP पठाउनुहोस्',
+    verifyOTP: 'OTP प्रमाणित गर्नुहोस्',
+    resendOTP: 'OTP पुनः पठाउनुहोस्',
+    noInternetConnection: 'इन्टरनेट जडान छैन',
+    pleaseCheckNetworkConnection: 'कृपया तपाईंको नेटवर्क जडान जाँच गर्नुहोस् र फेरि प्रयास गर्नुहोस्',
+    noInternetConnectionCheckNetwork: 'इन्टरनेट जडान छैन। कृपया तपाईंको नेटवर्क जाँच गर्नुहोस् र फेरि प्रयास गर्नुहोस्।',
+    otpSent: 'OTP पठाइयो',
+    pleaseCheckPhoneForVerificationCode: 'कृपया प्रमाणीकरण कोडको लागि तपाईंको फोन जाँच गर्नुहोस्। कोड १० मिनेटमा समाप्त हुन्छ।',
+    failedToSendOTP: 'OTP पठाउन असफल',
+    pleaseTryAgain: 'कृपया फेरि प्रयास गर्नुहोस्।',
+    pleaseEnterThe6DigitOTP: 'कृपया ६ अंकको OTP प्रविष्ट गर्नुहोस्',
+    otpHasExpiredPleaseRequestNewCode: 'OTP समाप्त भएको छ। कृपया नयाँ कोड अनुरोध गर्नुहोस्।',
+    verificationFailed: 'प्रमाणीकरण असफल',
+    requestNewCode: 'नयाँ कोड अनुरोध गर्नुहोस्',
+    sendingOTP: 'पठाउँदै...',
+    sendingOTPButton: 'OTP पठाउँदै...',
+    verifyingOTP: 'प्रमाणित गर्दै...',
+    resendingOTP: 'पुनः पठाउँदै...',
+    changePhoneNumber: 'फोन नम्बर परिवर्तन गर्नुहोस्',
+    sendVerificationCode: 'प्रमाणीकरण कोड पठाउनुहोस्',
+    forSecuritySendVerificationCode: 'सुरक्षाको लागि, हामी तपाईंको फोन नम्बरमा प्रमाणीकरण कोड पठाउनेछौं:',
     
     // Customer Form
     editCustomer: 'ग्राहक सम्पादन गर्नुहोस्',
@@ -757,7 +867,7 @@ export const [LanguageProvider, useLanguage] = createContextHook((): LanguageCon
         await AsyncStorage.setItem('app_language', 'ne');
       }
     } catch (error) {
-      console.log('Error loading language:', error);
+      console.error('Error loading language:', error);
       // Fallback to Nepali on error
       setLanguageState('ne');
     } finally {
@@ -770,18 +880,22 @@ export const [LanguageProvider, useLanguage] = createContextHook((): LanguageCon
       await AsyncStorage.setItem('app_language', lang);
       setLanguageState(lang);
     } catch (error) {
-      console.log('Error saving language:', error);
+      console.error('Error saving language:', error);
     }
   };
 
-  const t = (key: string): string => {
+  // Memoize translation function to prevent re-creation on every render
+  const t = React.useCallback((key: string): string => {
     return translations[language][key as keyof typeof translations['en']] || key;
-  };
+  }, [language]);
 
-  return {
+  // Memoize the return value to prevent unnecessary re-renders
+  const value = React.useMemo(() => ({
     language,
     setLanguage,
     t,
     isLoading
-  };
+  }), [language, setLanguage, t, isLoading]);
+
+  return value;
 });

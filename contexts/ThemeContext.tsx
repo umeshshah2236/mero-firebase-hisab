@@ -1,6 +1,6 @@
+import React, { useState, useEffect } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -102,16 +102,12 @@ export const [ThemeProvider, useTheme] = createContextHook((): ThemeContextType 
 
   const loadThemeMode = async () => {
     try {
-      console.log('Loading theme mode from AsyncStorage...');
       const savedThemeMode = await AsyncStorage.getItem('app_theme_mode');
-      console.log('Saved theme mode:', savedThemeMode);
       
       if (savedThemeMode && ['light', 'dark', 'system'].includes(savedThemeMode)) {
-        console.log('Setting theme mode to:', savedThemeMode);
         setThemeModeState(savedThemeMode as ThemeMode);
       } else {
         // Set default to light mode if no saved theme
-        console.log('No saved theme found, setting to light mode');
         setThemeModeState('light');
         await AsyncStorage.setItem('app_theme_mode', 'light');
       }
@@ -126,25 +122,30 @@ export const [ThemeProvider, useTheme] = createContextHook((): ThemeContextType 
 
   const setThemeMode = async (mode: ThemeMode) => {
     try {
-      console.log('Saving theme mode:', mode);
       await AsyncStorage.setItem('app_theme_mode', mode);
       setThemeModeState(mode);
-      console.log('Theme mode saved and state updated');
     } catch (error) {
       console.error('Error saving theme mode:', error);
     }
   };
 
-  const isDark = themeMode === 'dark' || (themeMode === 'system' && systemColorScheme === 'dark');
-  const theme = isDark ? darkTheme : lightTheme;
-  
-  console.log('Current theme mode:', themeMode, 'System scheme:', systemColorScheme, 'Is dark:', isDark);
+  // Memoize expensive calculations to prevent re-computation on every render
+  const isDark = React.useMemo(() => {
+    return themeMode === 'dark' || (themeMode === 'system' && systemColorScheme === 'dark');
+  }, [themeMode, systemColorScheme]);
 
-  return {
+  const theme = React.useMemo(() => {
+    return isDark ? darkTheme : lightTheme;
+  }, [isDark]);
+
+  // Memoize the return value to prevent unnecessary re-renders
+  const value = React.useMemo(() => ({
     theme,
     themeMode,
     setThemeMode,
     isDark,
     isLoading
-  };
+  }), [theme, themeMode, setThemeMode, isDark, isLoading]);
+
+  return value;
 });

@@ -127,15 +127,12 @@ export default function SettingsScreen() {
   };
 
   const handleSignIn = () => {
-    // Add haptic feedback for better user experience
+    // INSTANT haptic feedback for maximum responsiveness (same as Home → Calculator approach)
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    
-    // Add a small delay for smoother transition
-    setTimeout(() => {
-      router.push('/auth/sign-in');
-    }, 100);
+    // Remove delay for instant navigation (same as Home → Calculator approach)
+    router.push('/auth/sign-in');
   };
 
   const handleDeleteAccount = () => {
@@ -641,7 +638,7 @@ export default function SettingsScreen() {
               {!otpSent ? (
                 <View style={styles.deleteModalActions}>
                   <Text style={[styles.otpInstructions, { color: theme.colors.textSecondary }]}>
-                    For security, we'll send a verification code to your phone number: {user?.phone}
+                    {t('forSecuritySendVerificationCode')} {user?.phone}
                   </Text>
                   
                   {otpError ? (
@@ -664,7 +661,7 @@ export default function SettingsScreen() {
                     disabled={isSendingOtp}
                   >
                     <Text style={styles.sendOtpButtonText}>
-                      {isSendingOtp ? 'Sending...' : 'Send Verification Code'}
+                      {isSendingOtp ? t('sendingOTP') : t('sendVerificationCode')}
                     </Text>
                   </TouchableOpacity>
                   

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Platform, Alert, SafeAreaView, KeyboardAvoidingView } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Platform, Alert, SafeAreaView, KeyboardAvoidingView, InteractionManager } from 'react-native';
 import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Save, TrendingUp, Trash2, Plus, X } from 'lucide-react-native';
@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTransactionEntries } from '@/contexts/TransactionEntriesContext';
+import { useCustomers } from '@/contexts/CustomersContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import AmountInput from '@/components/AmountInput';
 import DatePicker from '@/components/DatePicker';
@@ -21,7 +22,7 @@ import { BSDate } from '@/utils/date-utils';
 export default function AddGiveEntryScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
-  const { updateTransactionEntry, deleteTransactionEntry, setFirebaseUser } = useTransactionEntries();
+  const { updateTransactionEntry, deleteTransactionEntry, setFirebaseUser, getAllTransactionEntries } = useTransactionEntries();
   const { addCustomer, searchCustomers } = useCustomers();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -234,6 +235,32 @@ export default function AddGiveEntryScreen() {
         (globalThis as any).__lastTransactionActivity = Date.now();
         // CRITICAL FIX: Invalidate customer cache since transaction was modified
         delete (globalThis as any).__customerSummariesCache;
+        // Clear customer detail cache to force fresh data
+        delete (globalThis as any).__customerDetailCache;
+        // Flag dashboard to refresh data when focused (for case when not coming from customer detail)
+        (globalThis as any).__needsDataRefresh = true;
+        
+        // REAL-TIME UPDATE: Immediately update both dashboard and customer detail page data
+        try {
+          // Get fresh transaction data
+          const freshTransactions = await getAllTransactionEntries();
+          
+          // Update global transaction cache for immediate dashboard updates
+          (globalThis as any).__latestTransactionData = {
+            transactions: freshTransactions,
+            updatedAt: Date.now()
+          };
+          
+          // If we have a customer detail page open, update its data immediately
+          if (customerName && (globalThis as any).__customerDetailInstance) {
+            const customerTransactions = freshTransactions.filter(entry => 
+              entry.customer_name && entry.customer_name.toLowerCase() === customerName.toLowerCase()
+            );
+            (globalThis as any).__customerDetailInstance.updateTransactions(customerTransactions);
+          }
+        } catch (error) {
+          console.error('Error updating real-time data:', error);
+        }
         // Return to customer statement page if we came from there
         if (customerName) {
           router.replace({
@@ -368,25 +395,33 @@ export default function AddGiveEntryScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // If we have customerName, return to that customer's statement page
-    // Otherwise, go to dashboard
-    setTimeout(() => {
+    // Android-specific: Use InteractionManager for smooth back navigation
+    if (Platform.OS === 'android') {
+      InteractionManager.runAfterInteractions(() => {
+        if (customerName) {
+          router.back(); // Use back navigation to return to customer detail
+        } else {
+          router.replace('/(tabs)/(home)/dashboard');
+        }
+      });
+    } else {
+      // iOS: Direct navigation
       if (customerName) {
-        router.replace({
-          pathname: '/(tabs)/(home)/customer-detail',
-          params: { customerName }
-        });
+        router.back(); // Use back navigation to return to customer detail
       } else {
         router.replace('/(tabs)/(home)/dashboard');
       }
-    }, 100);
+    }
   };
   
   return (
     <View style={styles.container}>
       <Stack.Screen 
         options={{ 
-          headerShown: false
+          headerShown: false,
+          // CRITICAL: Android background to prevent white flash during navigation
+          contentStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+          cardStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
         }} 
       />
 
@@ -505,7 +540,7 @@ export default function AddGiveEntryScreen() {
                         styles.modernTextInput,
                         {
                           borderColor: errors.entries?.[entry.id]?.description ? theme.colors.error : '#E2E8F0',
-                          backgroundColor: theme.colors.inputBackground || '#FFFFFF',
+                          backgroundColor: theme.colors.inputBackground || theme.colors.background,
                           color: theme.colors.text
                         }
                       ]}
@@ -544,7 +579,7 @@ export default function AddGiveEntryScreen() {
                         styles.lockedInput,
                         {
                           borderColor: '#E2E8F0',
-                          backgroundColor: '#F8FAFC',
+                          backgroundColor: theme.colors.background,
                           color: '#6B7280'
                         }
                       ]}

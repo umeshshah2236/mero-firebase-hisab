@@ -139,12 +139,12 @@ export default function AddLoanScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     if (!validateForm()) {
-      Alert.alert('Validation Error', 'Please fix the errors and try again.');
+      Alert.alert(t('validationError'), t('pleaseFixErrorsAndTryAgain'));
       return;
     }
 
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to add a transaction.');
+      Alert.alert(t('error'), t('youMustBeLoggedInToAddTransaction'));
       return;
     }
 
@@ -155,7 +155,7 @@ export default function AddLoanScreen() {
     // Test connection first
     const connectionTest = await testFirebaseConnection();
     if (!connectionTest) {
-      Alert.alert('Connection Error', 'Unable to connect to the database. Please check your internet connection.');
+              Alert.alert(t('connectionError'), t('unableToConnectToDatabase'));
       setIsLoading(false);
       return;
     }
@@ -164,7 +164,7 @@ export default function AddLoanScreen() {
     const { data: { session }, error: sessionError } = await auth.getSession();
     if (sessionError || !session) {
       console.error('Session error:', sessionError);
-      Alert.alert('Authentication Error', 'Your session has expired. Please log in again.');
+              Alert.alert(t('authenticationError'), t('sessionExpiredPleaseLogIn'));
       setIsLoading(false);
       return;
     }
@@ -288,7 +288,7 @@ export default function AddLoanScreen() {
       await refreshTransactionEntries();
 
       Alert.alert(
-        'Success',
+        t('success'),
         'Transaction record has been added successfully!',
         [
           {
@@ -313,7 +313,7 @@ export default function AddLoanScreen() {
         errorMessage = 'An unknown error occurred';
       }
       
-      Alert.alert('Error', `Error saving transaction: ${errorMessage}`);
+              Alert.alert(t('error'), `${t('errorSavingTransaction')}: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }

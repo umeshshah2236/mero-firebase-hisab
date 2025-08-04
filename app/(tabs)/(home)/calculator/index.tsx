@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Dimensions, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Dimensions, TouchableWithoutFeedback, Keyboard, InteractionManager } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -201,10 +201,15 @@ export default React.memo(function CalculatorScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Add a small delay for smoother transition
-    setTimeout(() => {
+    // Android-specific: Use InteractionManager for smooth back navigation
+    if (Platform.OS === 'android') {
+      InteractionManager.runAfterInteractions(() => {
+        router.back();
+      });
+    } else {
+      // iOS: Direct back navigation
       router.back();
-    }, 100);
+    }
   };
 
   // Responsive header padding with proper back button alignment
@@ -260,7 +265,7 @@ export default React.memo(function CalculatorScreen() {
                 fontWeight: '700',
                 letterSpacing: 0.3,
               }]}>
-                ग्रामीण ब्याज क्यालकुलेटर
+                {t('calculator')}
               </Text>
               
 

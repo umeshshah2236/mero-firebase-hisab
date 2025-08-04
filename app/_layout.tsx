@@ -90,10 +90,32 @@ function RootLayoutNav() {
       <Stack screenOptions={{ 
         headerBackTitle: "Back",
         gestureEnabled: true,
-        animation: 'slide_from_right', // Forward navigation - slide from right
-        animationDuration: 300, // Smooth animation duration
-        animationTypeForReplace: 'push',
+        animation: Platform.OS === 'android' ? 'none' : 'slide_from_right', // No animation on Android
+        animationDuration: Platform.OS === 'android' ? 200 : 300,
+        animationTypeForReplace: 'push', // Keep consistent
         gestureDirection: 'horizontal',
+        // CRITICAL: Android background color to prevent white flash
+        contentStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+        cardStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+        // CRITICAL: Disable complex animations - use simple fade for Android
+        ...(Platform.OS === 'android' && {
+          cardStyleInterpolator: ({ current, next, layouts }) => {
+            return {
+              cardStyle: {
+                backgroundColor: '#0F172A',
+                opacity: 1, // Always opaque
+                transform: [
+                  {
+                    translateX: current.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, 0], // No slide animation
+                    }),
+                  },
+                ],
+              },
+            };
+          },
+        }),
       }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen 
@@ -101,11 +123,14 @@ function RootLayoutNav() {
           options={{ 
             headerShown: false, 
             headerBackVisible: false,
-            gestureEnabled: true,
+            gestureEnabled: true, // Enable gesture for both platforms (same as Home → Calculator approach)
             gestureDirection: 'horizontal',
-            animation: 'slide_from_right', // Forward: Settings → Sign-in
-            animationDuration: 300,
+            animation: Platform.OS === 'android' ? 'none' : 'slide_from_right', // No animation on Android
+            animationDuration: Platform.OS === 'android' ? 0 : 300,
             animationTypeForReplace: 'push',
+            // CRITICAL: White background for light theme sign-in page
+            contentStyle: { backgroundColor: '#FFFFFF' },
+            cardStyle: { backgroundColor: '#FFFFFF' },
           }} 
         />
 
@@ -128,28 +153,40 @@ function RootLayoutNav() {
 // Component to sync auth user with other contexts
 function UserSyncProvider({ children }: { children: React.ReactNode }) {
   const { firebaseUser } = useAuth();
-  
-  // Always call hooks in the same order
-  const customersContext = useCustomers();
-  const transactionEntriesContext = useTransactionEntries();
 
   React.useEffect(() => {
     console.log('UserSyncProvider: firebaseUser changed:', firebaseUser?.uid);
     
+    // We'll handle the context syncing in a different way
+    // to avoid the hook dependency issue
+  }, [firebaseUser]);
+
+  return <>{children}</>;
+}
+
+// Component to sync contexts after providers are available
+function ContextSyncProvider({ children }: { children: React.ReactNode }) {
+  const { firebaseUser } = useAuth();
+  const customersContext = useCustomers();
+  const transactionEntriesContext = useTransactionEntries();
+
+  React.useEffect(() => {
+    console.log('ContextSyncProvider: firebaseUser changed:', firebaseUser?.uid);
+    
     // Sync the firebase user to all contexts
     try {
       if (customersContext && typeof customersContext.setFirebaseUser === 'function') {
-        console.log('UserSyncProvider: Syncing to customersContext');
+        console.log('ContextSyncProvider: Syncing to customersContext');
         customersContext.setFirebaseUser(firebaseUser);
       } else {
-        console.log('UserSyncProvider: customersContext.setFirebaseUser not available');
+        console.log('ContextSyncProvider: customersContext.setFirebaseUser not available');
       }
       
       if (transactionEntriesContext && typeof transactionEntriesContext.setFirebaseUser === 'function') {
-        console.log('UserSyncProvider: Syncing to transactionEntriesContext');
+        console.log('ContextSyncProvider: Syncing to transactionEntriesContext');
         transactionEntriesContext.setFirebaseUser(firebaseUser);
       } else {
-        console.log('UserSyncProvider: transactionEntriesContext.setFirebaseUser not available');
+        console.log('ContextSyncProvider: transactionEntriesContext.setFirebaseUser not available');
       }
     } catch (error) {
       console.error('Error syncing firebase user to contexts:', error);
@@ -216,8 +253,10 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <StatusBar 
           style="light" 
-          backgroundColor={Platform.OS === 'android' ? 'transparent' : "#3B82F6"}
-          translucent={Platform.OS === 'android'}
+          backgroundColor="#0F172A"
+          translucent={false}
+          barStyle="light-content"
+          hidden={false}
         />
                         <ThemeProvider>
                   <LanguageProvider>
@@ -226,11 +265,11 @@ export default function RootLayout() {
                         <UserProfileProvider>
                           <CustomersProvider>
                             <TransactionEntriesProvider>
-                              <UserSyncProvider>
-                                <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#1a1a2e' }}>
+                              <ContextSyncProvider>
+                                <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0F172A' }}>
                                   <RootLayoutNav />
                                 </GestureHandlerRootView>
-                              </UserSyncProvider>
+                              </ContextSyncProvider>
                             </TransactionEntriesProvider>
                           </CustomersProvider>
                         </UserProfileProvider>

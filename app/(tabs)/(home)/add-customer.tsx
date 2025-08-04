@@ -125,7 +125,7 @@ export default function AddCustomerScreen() {
       console.error('Error loading contacts:', error);
       setContacts([]);
       setContactsLoaded(true);
-      Alert.alert('Error', 'Failed to load contacts. You can still add customers manually.');
+      Alert.alert(t('error'), t('failedToLoadContacts'));
     } finally {
       setLoading(false);
     }
@@ -329,7 +329,12 @@ export default function AddCustomerScreen() {
   if (!hasPermission) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: false }} />
+        <Stack.Screen options={{ 
+          headerShown: false,
+          // CRITICAL: Android background to prevent white flash during navigation
+          contentStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+          cardStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+        }} />
         <KeyboardAvoidingView 
           style={{ flex: 1 }} 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -337,7 +342,7 @@ export default function AddCustomerScreen() {
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <ScrollView 
-              style={[styles.container, { backgroundColor: isDark ? theme.colors.background : '#f8fafc' }]} 
+              style={[styles.container, { backgroundColor: theme.colors.background }]} 
               contentContainerStyle={[styles.contentContainer, { paddingBottom: 100 }]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -408,7 +413,7 @@ export default function AddCustomerScreen() {
                 </Text>
                 <View style={[styles.inputContainer, {
                   borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : '#e2e8f0',
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#f8fafc',
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : theme.colors.background,
                 }]}>
                   <User size={20} color={isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b'} style={styles.inputIcon} />
                   <TextInputWithDoneBar
@@ -457,7 +462,7 @@ export default function AddCustomerScreen() {
                   marginTop: getResponsiveSize(24, 28, 32),
                   marginBottom: getResponsiveSize(16, 20, 24),
                   padding: getResponsiveSize(16, 20, 24),
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f8fafc',
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : theme.colors.background,
                   borderRadius: 12,
                   borderWidth: 1,
                   borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0',
@@ -524,14 +529,19 @@ export default function AddCustomerScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen options={{ 
+        headerShown: false,
+        // CRITICAL: Android background to prevent white flash during navigation
+        contentStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+        cardStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+      }} />
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={[styles.container, { backgroundColor: isDark ? theme.colors.background : '#f8fafc' }]}>
+          <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
           {/* Sticky Header Section */}
           <LinearGradient
             colors={['#1e40af', '#3b82f6']}
@@ -602,7 +612,7 @@ export default function AddCustomerScreen() {
               </Text>
               <View style={[styles.inputContainer, {
                 borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : '#e2e8f0',
-                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#f8fafc',
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : theme.colors.background,
               }]}>
                 <Search size={20} color={isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b'} style={styles.inputIcon} />
                 <TextInputWithDoneBar
@@ -695,7 +705,7 @@ export default function AddCustomerScreen() {
                 <TouchableOpacity
                   key={contact.id}
                   style={[styles.contactItem, { 
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f8fafc',
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : theme.colors.background,
                     borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0',
                   }]}
                   onPress={() => handleContactPress(contact)}

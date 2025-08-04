@@ -95,8 +95,8 @@ export default function SignInScreen() {
 
     // 🌐 Check network connectivity first
     if (!isOnline) {
-      setErrors({ phone: 'No internet connection. Please check your network and try again.' });
-      Alert.alert('No Internet Connection', 'Please check your network connection and try again.');
+      setErrors({ phone: t('noInternetConnectionCheckNetwork') });
+      Alert.alert(t('noInternetConnection'), t('pleaseCheckNetworkConnection'));
       return;
     }
 
@@ -141,10 +141,10 @@ export default function SignInScreen() {
       setOtpExpiryTime(result.expiresAt || (Date.now() + (10 * 60 * 1000))); // Use server time or fallback to 10 minutes
       setOtpExpired(false);
       setOtp(''); // Clear previous OTP
-      Alert.alert('OTP Sent', 'Please check your phone for the verification code. Code expires in 10 minutes.');
+      Alert.alert(t('otpSent'), t('pleaseCheckPhoneForVerificationCode'));
     } else {
       setErrors({ phone: result.error });
-      Alert.alert('Failed to Send OTP', result.error || 'Please try again.');
+      Alert.alert(t('failedToSendOTP'), result.error || t('pleaseTryAgain'));
     }
 
     if (isResend) {
@@ -161,8 +161,8 @@ export default function SignInScreen() {
 
     // 🌐 Check network connectivity first
     if (!isOnline) {
-      setErrors({ otp: 'No internet connection. Please check your network and try again.' });
-      Alert.alert('No Internet Connection', 'Please check your network connection and try again.');
+      setErrors({ otp: t('noInternetConnectionCheckNetwork') });
+      Alert.alert(t('noInternetConnection'), t('pleaseCheckNetworkConnection'));
       return;
     }
 
@@ -170,13 +170,13 @@ export default function SignInScreen() {
     setErrors({});
 
     if (!otp || otp.length !== 6) {
-      setErrors({ otp: 'Please enter the 6-digit OTP' });
+      setErrors({ otp: t('pleaseEnterThe6DigitOTP') });
       setIsLoading(false);
       return;
     }
 
     if (otpExpired) {
-      setErrors({ otp: 'OTP has expired. Please request a new code.' });
+      setErrors({ otp: t('otpHasExpiredPleaseRequestNewCode') });
       setIsLoading(false);
       return;
     }
@@ -201,12 +201,12 @@ export default function SignInScreen() {
       // If the error indicates expired/invalid OTP, suggest requesting new code
       if (result.error?.includes('expired') || result.error?.includes('invalid')) {
         Alert.alert(
-          'Verification Failed', 
+          t('verificationFailed'), 
           result.error,
           [
-            { text: 'OK', style: 'default' },
+            { text: t('ok'), style: 'default' },
             { 
-              text: 'Request New Code', 
+              text: t('requestNewCode'), 
               onPress: () => {
                 setIsOtpSent(false);
                 setOtp('');
@@ -220,7 +220,7 @@ export default function SignInScreen() {
           ]
         );
       } else {
-        Alert.alert('Verification Failed', result.error || 'Please try again.');
+        Alert.alert(t('verificationFailed'), result.error || t('pleaseTryAgain'));
       }
     }
 
@@ -228,15 +228,12 @@ export default function SignInScreen() {
   };
 
   const handleGoBack = () => {
+    // INSTANT haptic feedback for maximum responsiveness (same as Home → Calculator approach)
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    
-    // Add a small delay for smoother transition
-    setTimeout(() => {
-      // Navigate back to settings with slide_from_left (backward navigation)
-      router.back();
-    }, 100);
+    // Remove delay for instant navigation (same as Home → Calculator approach)
+    router.back();
   };
 
 
@@ -255,16 +252,18 @@ export default function SignInScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen options={{ 
+        headerShown: false,
+      }} />
       <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
+        style={{ flex: 1, backgroundColor: theme.colors.background }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} style={{ backgroundColor: theme.colors.background, flex: 1 }}>
           <ScrollView 
-            style={[styles.container, { backgroundColor: isDark ? theme.colors.background : '#f8fafc' }]} 
-            contentContainerStyle={styles.contentContainer}
+            style={[styles.container, { backgroundColor: theme.colors.background }]}
+            contentContainerStyle={[styles.contentContainer, { backgroundColor: theme.colors.background }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -291,14 +290,14 @@ export default function SignInScreen() {
                 <Text style={[styles.headerTitle, {
                   fontSize: getResponsiveSize(22, 26, 30),
                 }]}>
-                  {isOtpSent ? 'Verify Code' : 'Welcome Back'}
+                  {isOtpSent ? t('verifyCode') : t('welcomeBack')}
                 </Text>
                 <Text style={[styles.headerSubtitle, {
                   fontSize: getResponsiveSize(13, 14, 15),
                   marginTop: getResponsiveSize(2, 4, 6),
                   marginBottom: getResponsiveSize(4, 6, 8),
                 }]}>
-                  {isOtpSent ? 'Enter the verification code sent to your phone' : 'Sign In or Create Account'}
+                  {isOtpSent ? t('enterVerificationCodeSentToPhone') : t('signInOrCreateAccount')}
                 </Text>
               </View>
               
@@ -309,13 +308,13 @@ export default function SignInScreen() {
           </LinearGradient>
           
           <View style={[styles.formContainer, { 
-            backgroundColor: isDark ? theme.colors.surface : 'white',
+            backgroundColor: theme.colors.surface,
             paddingHorizontal: getResponsiveSize(16, 20, 24),
             paddingTop: getResponsiveSize(24, 28, 32),
             marginHorizontal: getResponsiveSize(12, 16, 20),
             marginTop: getResponsiveSize(-16, -20, -24),
             borderRadius: getResponsiveSize(16, 18, 20),
-            shadowColor: isDark ? 'rgba(0, 0, 0, 0.5)' : '#000',
+            shadowColor: '#000',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: isDark ? 0.3 : 0.1,
             shadowRadius: 12,
@@ -328,20 +327,20 @@ export default function SignInScreen() {
                 marginTop: getResponsiveSize(2, 4, 6),
               }]}>
                 <Text style={[styles.inputLabel, { 
-                  color: isDark ? theme.colors.text : '#1e293b',
+                  color: theme.colors.text,
                   fontSize: getResponsiveSize(16, 17, 18),
                   fontWeight: '700',
                 }]}>
-                  Mobile Number
+                  {t('phoneNumber')}
                 </Text>
                  <View style={[styles.inputContainer, {
-                   borderColor: errors.phone ? (isDark ? '#f87171' : '#ef4444') : (isDark ? 'rgba(255, 255, 255, 0.2)' : '#e2e8f0'),
-                   backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#f8fafc',
+                   borderColor: errors.phone ? '#ef4444' : theme.colors.border,
+                   backgroundColor: theme.colors.background,
                  }]}>
-                  <Phone size={20} color={isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b'} style={styles.inputIcon} />
+                  <Phone size={20} color={isDark ? '#94a3b8' : '#64748b'} style={styles.inputIcon} /> 
                   <TextInputWithDoneBar
                     ref={phoneInputRef}
-                    style={[styles.input, { color: isDark ? theme.colors.text : '#1e293b' }, Platform.OS === 'web' && styles.webInput]}
+                    style={[styles.input, { color: theme.colors.text }, Platform.OS === 'web' && styles.webInput]}
                     value={phoneNumber}
                     onChangeText={(text) => {
                       // Add haptic feedback when user starts typing
@@ -356,7 +355,7 @@ export default function SignInScreen() {
                       }
                     }}
                     placeholder="+977 98XXXXXXXX"
-                    placeholderTextColor={isDark ? 'rgba(255, 255, 255, 0.4)' : '#94a3b8'}
+                    placeholderTextColor={isDark ? '#64748b' : '#94a3b8'}
                     keyboardType="phone-pad"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -369,7 +368,7 @@ export default function SignInScreen() {
                   />
                 </View>
                 {errors.phone && (
-                  <Text style={[styles.errorText, { color: isDark ? '#f87171' : '#ef4444' }]}>
+                  <Text style={[styles.errorText, { color: '#ef4444' }]}> 
                     {errors.phone}
                   </Text>
                 )}
@@ -380,31 +379,31 @@ export default function SignInScreen() {
                 marginBottom: getResponsiveSize(20, 24, 28),
               }]}>
                 <Text style={[styles.inputLabel, { 
-                  color: isDark ? theme.colors.text : '#1e293b',
+                  color: theme.colors.text,
                   fontSize: getResponsiveSize(16, 17, 18),
                   fontWeight: '700',
                 }]}>
-                  Verification Code
+                  {t('verificationCode')}
                 </Text>
                 <Text style={[styles.otpHint, { 
-                  color: otpExpired ? (isDark ? '#f87171' : '#ef4444') : (isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b'),
+                  color: otpExpired ? '#ef4444' : (isDark ? '#94a3b8' : '#64748b'),
                   fontSize: getResponsiveSize(12, 13, 14),
                 }]}>
                   {otpExpired 
-                    ? 'OTP has expired. Please request a new code.' 
+                    ? t('otpHasExpiredPleaseRequestNewCode')
                     : Platform.OS === 'android' 
-                      ? `Enter 6-digit code.${timeRemaining ? ` Expires in ${timeRemaining}` : ''}`
-                      : `Enter the 6-digit code sent to your phone.${timeRemaining ? ` Expires in ${timeRemaining}` : ''}`
+                      ? `${t('pleaseEnterThe6DigitOTP')}.${timeRemaining ? ` Expires in ${timeRemaining}` : ''}`
+                      : `${t('pleaseEnterThe6DigitOTP')}.${timeRemaining ? ` Expires in ${timeRemaining}` : ''}`
                   }
                 </Text>
                  <View style={[styles.inputContainer, {
-                   borderColor: errors.otp ? (isDark ? '#f87171' : '#ef4444') : (isDark ? 'rgba(255, 255, 255, 0.2)' : '#e2e8f0'),
-                   backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#f8fafc',
+                   borderColor: errors.otp ? '#ef4444' : theme.colors.border,
+                   backgroundColor: theme.colors.background,
                  }]}>
-                  <MessageSquare size={20} color={isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b'} style={styles.inputIcon} />
+                  <MessageSquare size={20} color={isDark ? '#94a3b8' : '#64748b'} style={styles.inputIcon} />
                   <TextInputWithDoneBar
                     ref={otpInputRef}
-                    style={[styles.input, { color: isDark ? theme.colors.text : '#1e293b', textAlign: 'center', letterSpacing: 4 }, Platform.OS === 'web' && styles.webInput]}
+                    style={[styles.input, { color: theme.colors.text, textAlign: 'center', letterSpacing: 4 }, Platform.OS === 'web' && styles.webInput]}
                     value={otp}
                     onChangeText={(text) => {
                       // Add haptic feedback when user starts typing
@@ -414,7 +413,7 @@ export default function SignInScreen() {
                       setOtp(text);
                     }}
                     placeholder="000000"
-                    placeholderTextColor={isDark ? 'rgba(255, 255, 255, 0.4)' : '#94a3b8'}
+                    placeholderTextColor={isDark ? '#64748b' : '#94a3b8'}
                     keyboardType="number-pad"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -427,7 +426,7 @@ export default function SignInScreen() {
                   />
                 </View>
                 {errors.otp && (
-                  <Text style={[styles.errorText, { color: isDark ? '#f87171' : '#ef4444' }]}>
+                  <Text style={[styles.errorText, { color: '#ef4444' }]}>
                     {errors.otp}
                   </Text>
                 )}
@@ -441,11 +440,11 @@ export default function SignInScreen() {
                     disabled={countdown > 0 || isResending}
                   >
                     <Text style={[styles.resendText, { 
-                      color: countdown > 0 ? (isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b') : '#2563eb',
+                      color: countdown > 0 ? (isDark ? '#64748b' : '#64748b') : (isDark ? '#60a5fa' : '#2563eb'),
                       opacity: countdown > 0 ? 0.6 : 1,
                       fontWeight: countdown > 0 ? '500' : '600'
                     }]}>
-                      {isResending ? 'Resending...' : countdown > 0 ? `Resend OTP (${Math.floor(countdown / 60)}:${(countdown % 60).toString().padStart(2, '0')})` : 'Resend OTP'}
+                      {isResending ? t('resendingOTP') : countdown > 0 ? `${t('resendOTP')} (${Math.floor(countdown / 60)}:${(countdown % 60).toString().padStart(2, '0')})` : t('resendOTP')}
                     </Text>
                   </TouchableOpacity>
                   
@@ -461,8 +460,8 @@ export default function SignInScreen() {
                       setTimeRemaining('');
                     }}
                   >
-                    <Text style={[styles.changeNumberText, { color: isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b' }]}>
-                      Change Phone Number
+                    <Text style={[styles.changeNumberText, { color: isDark ? '#94a3b8' : '#64748b' }]}> 
+                      {t('changePhoneNumber')}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -500,8 +499,8 @@ export default function SignInScreen() {
                    fontSize: getResponsiveSize(14, 15, 16),
                  }]}>
                    {isLoading 
-                     ? (isOtpSent ? 'Verifying...' : 'Sending OTP...') 
-                     : (isOtpSent ? 'Verify OTP' : 'Send OTP')
+                     ? (isOtpSent ? t('verifyingOTP') : t('sendingOTPButton')) 
+                     : (isOtpSent ? t('verifyOTP') : t('sendOTP'))
                    }
                  </Text>
                </LinearGradient>
@@ -524,6 +523,8 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingBottom: 40,
+    backgroundColor: '#FFFFFF', // Ensure white background
+    flexGrow: 1, // Fill entire screen
   },
   header: {
     borderBottomLeftRadius: 32,

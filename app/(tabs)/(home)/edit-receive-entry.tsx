@@ -20,7 +20,7 @@ import { BS_MONTHS } from '@/constants/calendar';
 export default function EditReceiveEntryScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
-  const { updateTransactionEntry, deleteTransactionEntry, setFirebaseUser } = useTransactionEntries();
+  const { updateTransactionEntry, deleteTransactionEntry, setFirebaseUser, getAllTransactionEntries } = useTransactionEntries();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
@@ -134,15 +134,37 @@ export default function EditReceiveEntryScreen() {
       
       console.log('Receive entry updated successfully');
       
-      // Return to customer statement page if we came from there
-      if (customerName) {
-        router.replace({
-          pathname: '/(tabs)/(home)/customer-detail',
-          params: { customerName }
-        });
-      } else {
-        router.replace('/(tabs)/(home)/dashboard');
+      // Clear caches to force fresh data
+      delete (globalThis as any).__customerSummariesCache;
+      delete (globalThis as any).__customerDetailCache;
+      // Flag dashboard to refresh data when focused
+      (globalThis as any).__needsDataRefresh = true;
+      
+      // REAL-TIME UPDATE: Immediately update both dashboard and customer detail page data
+      try {
+        // Get fresh transaction data
+        const freshTransactions = await getAllTransactionEntries();
+        
+        // Update global transaction cache for immediate dashboard updates
+        (globalThis as any).__latestTransactionData = {
+          transactions: freshTransactions,
+          updatedAt: Date.now()
+        };
+        
+        // If we have a customer detail page open, update its data immediately
+        if ((globalThis as any).__customerDetailInstance && formData.customerName) {
+          const customerTransactions = freshTransactions.filter(entry => 
+            entry.customer_name && entry.customer_name.toLowerCase() === formData.customerName.toLowerCase()
+          );
+          (globalThis as any).__customerDetailInstance.updateTransactions(customerTransactions);
+        }
+      } catch (error) {
+        console.error('Error updating real-time data:', error);
       }
+      
+      // Navigate back to previous page (customer statement or dashboard)
+      // Use router.back() to properly remove this edit page from the navigation stack
+      router.back();
       
     } catch (error) {
       console.error('Error updating receive entry:', error);
@@ -175,15 +197,37 @@ export default function EditReceiveEntryScreen() {
         await deleteTransactionEntry(editTransactionId);
         console.log('Transaction deleted successfully');
         
-        // Return to customer statement page if we came from there
-        if (customerName) {
-          router.replace({
-            pathname: '/(tabs)/(home)/customer-detail',
-            params: { customerName }
-          });
-        } else {
-          router.replace('/(tabs)/(home)/dashboard');
+        // Clear caches to force fresh data
+        delete (globalThis as any).__customerSummariesCache;
+        delete (globalThis as any).__customerDetailCache;
+        // Flag dashboard to refresh data when focused
+        (globalThis as any).__needsDataRefresh = true;
+        
+        // REAL-TIME UPDATE: Immediately update both dashboard and customer detail page data
+        try {
+          // Get fresh transaction data
+          const freshTransactions = await getAllTransactionEntries();
+          
+          // Update global transaction cache for immediate dashboard updates
+          (globalThis as any).__latestTransactionData = {
+            transactions: freshTransactions,
+            updatedAt: Date.now()
+          };
+          
+          // If we have a customer detail page open, update its data immediately
+          if ((globalThis as any).__customerDetailInstance && formData.customerName) {
+            const customerTransactions = freshTransactions.filter(entry => 
+              entry.customer_name && entry.customer_name.toLowerCase() === formData.customerName.toLowerCase()
+            );
+            (globalThis as any).__customerDetailInstance.updateTransactions(customerTransactions);
+          }
+        } catch (error) {
+          console.error('Error updating real-time data:', error);
         }
+        
+        // Navigate back to previous page (customer statement or dashboard)
+        // Use router.back() to properly remove this edit page from the navigation stack
+        router.back();
       } catch (error) {
         console.error('Error deleting entry:', error);
         const errorMessage = error instanceof Error ? error.message : t('failedToDeleteEntry');
@@ -342,7 +386,7 @@ export default function EditReceiveEntryScreen() {
                     styles.modernTextInput,
                     {
                       borderColor: '#E2E8F0',
-                      backgroundColor: theme.colors.inputBackground || '#FFFFFF',
+                      backgroundColor: theme.colors.inputBackground || theme.colors.background,
                       color: theme.colors.text
                     }
                   ]}
@@ -367,7 +411,7 @@ export default function EditReceiveEntryScreen() {
                     styles.lockedInput,
                     {
                       borderColor: '#E2E8F0',
-                      backgroundColor: '#F8FAFC',
+                      backgroundColor: theme.colors.background,
                       color: '#6B7280'
                     }
                   ]}

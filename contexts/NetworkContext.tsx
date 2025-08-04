@@ -200,13 +200,22 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [isOnline, pendingOperations.length, syncPendingOperations]);
 
-  // Periodic connectivity check
+  // Optimized connectivity check - only when needed, not polling
   useEffect(() => {
-    const interval = setInterval(() => {
-      checkConnectivity();
-    }, 30000); // Check every 30 seconds
+    // Check connectivity only on app state change or when explicitly needed
+    // Removed 30-second polling to improve performance
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        checkConnectivity();
+      }
+    };
 
-    return () => clearInterval(interval);
+    // Only add listener if AppState is available (mobile)
+    const AppState = require('react-native').AppState;
+    if (AppState) {
+      const subscription = AppState.addEventListener('change', handleAppStateChange);
+      return () => subscription?.remove();
+    }
   }, [checkConnectivity]);
 
   const value: NetworkContextType = {

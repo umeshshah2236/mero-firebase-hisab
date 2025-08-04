@@ -53,7 +53,7 @@ export default function HomeScreen() {
   
   // Debug logging for Android devices
   if (isAndroid) {
-    console.log('📱 Screen Dimensions:', { screenWidth, screenHeight, isSmallScreen, isVerySmallScreen });
+    // Removed excessive screen dimensions logging to prevent render loops
   }
   
   const getResponsiveSize = (baseSize: number) => {
@@ -571,7 +571,7 @@ const styles = StyleSheet.create({
   },
   ctaSection: {},
   ctaCard: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#0F172A',
     borderRadius: 28,
     alignItems: 'center',
     borderWidth: 2,

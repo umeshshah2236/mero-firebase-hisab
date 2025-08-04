@@ -87,20 +87,20 @@ export default function CustomerFormScreen() {
     
     if (!customerName.trim()) {
       console.log('ERROR: Customer name is empty');
-      Alert.alert('Error', 'Please enter customer name');
+      Alert.alert(t('error'), t('pleaseEnterCustomerName'));
       return;
     }
 
     // Phone number is now optional, but if provided, check for errors
     if (phoneNumber.trim() && phoneError) {
       console.log('ERROR: Phone number has validation error:', phoneError);
-      Alert.alert('Error', 'Please use a different phone number or update the existing customer');
+      Alert.alert(t('error'), t('pleaseUseDifferentPhoneNumber'));
       return;
     }
 
     if (!firebaseUser) {
       console.log('ERROR: User not authenticated');
-      Alert.alert('Error', 'You must be logged in to save customers');
+      Alert.alert(t('error'), t('youMustBeLoggedInToSaveCustomers'));
       return;
     }
 
@@ -353,7 +353,12 @@ export default function CustomerFormScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen options={{ 
+        headerShown: false,
+        // CRITICAL: Android background to prevent white flash during navigation
+        contentStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+        cardStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+      }} />
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -361,7 +366,7 @@ export default function CustomerFormScreen() {
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView 
-            style={[styles.container, { backgroundColor: isDark ? theme.colors.background : '#f8fafc' }]} 
+            style={[styles.container, { backgroundColor: theme.colors.background }]} 
             contentContainerStyle={[styles.contentContainer, { paddingBottom: 100 }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
@@ -434,7 +439,7 @@ export default function CustomerFormScreen() {
               </Text>
               <View style={[styles.inputContainer, {
                 borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : '#e2e8f0',
-                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#f8fafc',
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : theme.colors.background,
               }]}>
                 <User size={20} color={isDark ? 'rgba(255, 255, 255, 0.6)' : '#64748b'} style={styles.inputIcon} />
                 <TextInputWithDoneBar
@@ -483,7 +488,7 @@ export default function CustomerFormScreen() {
                 borderColor: phoneError 
                   ? (isDark ? '#f87171' : '#ef4444') 
                   : (isDark ? 'rgba(255, 255, 255, 0.2)' : '#e2e8f0'),
-                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#f8fafc',
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : theme.colors.background,
               }]}>
                 <Phone size={20} color={phoneError 
                   ? (isDark ? '#f87171' : '#ef4444') 

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useMemo, useCallback, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, Animated, Platform, ScrollView, RefreshControl, Alert, Modal } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, Animated, Platform, ScrollView, RefreshControl, Alert, Modal, InteractionManager } from 'react-native';
 import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { Stack, router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { ArrowLeft, TrendingUp, TrendingDown, Calendar, Clock, Edit3, Trash2, MoreHorizontal, UserX, Calculator, X } from 'lucide-react-native';
@@ -38,13 +38,35 @@ interface DayGroup {
   entries: TransactionEntry[];
 }
 
-export default function CustomerDetailScreen() {
-  const { theme } = useTheme();
+export default React.memo(function CustomerDetailScreen() {
+  const { theme, isDark } = useTheme();
   const { t } = useLanguage();
   const { user } = useAuth();
   const { setFirebaseUser, getAllTransactionEntries } = useTransactionEntries();
   const transactionEntriesContext = useTransactionEntries();
   const { deleteCustomer, customers, fetchCustomers, addCustomer } = useCustomers();
+
+  // Real-time update method for external calls
+  const updateTransactions = useCallback((newTransactions: TransactionEntry[]) => {
+    console.log('Customer detail: Receiving real-time transaction update', newTransactions.length);
+    setTransactionEntries(newTransactions);
+    setDisplayedTransactionEntries(newTransactions);
+    setHasFreshTransactionData(true);
+  }, []);
+
+  // Register this instance globally for real-time updates
+  useEffect(() => {
+    (globalThis as any).__customerDetailInstance = {
+      updateTransactions
+    };
+    
+    return () => {
+      // Clean up when component unmounts
+      if ((globalThis as any).__customerDetailInstance) {
+        delete (globalThis as any).__customerDetailInstance;
+      }
+    };
+  }, [updateTransactions]);
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
     const bounceAnim = useRef(new Animated.Value(0)).current;
@@ -254,7 +276,7 @@ export default function CustomerDetailScreen() {
 
     } catch (error) {
       console.error('Interest calculation error:', error);
-      Alert.alert(t('error'), t('calculationError') || 'Error calculating interest');
+              Alert.alert(t('error'), t('calculationError'));
     }
   }, [interestRate, endDate, displayedTransactionEntries, customerName, t]);
 
@@ -843,13 +865,13 @@ export default function CustomerDetailScreen() {
     const customerToReceive = customers.find(c => c.name === customerName);
     
     if (!customerToReceive) {
-      Alert.alert('Error', 'Customer not found');
+      Alert.alert(t('error'), t('customerNotFound'));
       return;
     }
     
     // Navigate to Add Receive Entry screen
     console.log('TO RECEIVE pressed for:', customerName, 'with ID:', customerToReceive.id);
-    router.replace({
+    router.push({
       pathname: '/(tabs)/(home)/add-receive-entry',
       params: {
         customerName,
@@ -867,13 +889,13 @@ export default function CustomerDetailScreen() {
     const customerToGive = customers.find(c => c.name === customerName);
     
     if (!customerToGive) {
-      Alert.alert('Error', 'Customer not found');
+      Alert.alert(t('error'), t('customerNotFound'));
       return;
     }
     
     // Navigate to Add Give Entry screen
     console.log('TO GIVE pressed for:', customerName, 'with ID:', customerToGive.id);
-    router.replace({
+    router.push({
       pathname: '/(tabs)/(home)/add-give-entry',
       params: {
         customerName,
@@ -909,19 +931,19 @@ export default function CustomerDetailScreen() {
       console.log('Navigating with edit params:', editParams);
       
       if (entry.type === 'received') {
-        router.replace({
+        router.push({
           pathname: '/(tabs)/(home)/edit-receive-entry',
           params: editParams
         });
       } else {
-        router.replace({
+        router.push({
           pathname: '/(tabs)/(home)/edit-give-entry',
           params: editParams
         });
       }
     } else {
       console.error('Could not find transaction entry for editing:', entry.id);
-      Alert.alert('Error', 'Could not find transaction for editing');
+              Alert.alert(t('error'), t('couldNotFindTransactionForEditing'));
     }
   };
 
@@ -937,7 +959,7 @@ export default function CustomerDetailScreen() {
     );
     
     if (!transactionEntry) {
-      Alert.alert('Error', 'Transaction not found');
+      Alert.alert(t('error'), t('transactionNotFound'));
       return;
     }
 
@@ -959,11 +981,11 @@ export default function CustomerDetailScreen() {
                 // CRITICAL FIX: Invalidate customer cache since transaction was modified
                 delete (globalThis as any).__customerSummariesCache;
                 await handleBackgroundRefresh();
-                Alert.alert('Success', 'Transaction deleted successfully');
+                Alert.alert(t('success'), t('transactionDeletedSuccessfully'));
               }
             } catch (error) {
               console.error('Error deleting transaction:', error);
-              Alert.alert('Error', error instanceof Error ? error.message : 'Failed to delete transaction');
+              Alert.alert(t('error'), error instanceof Error ? error.message : t('failedToDeleteTransaction'));
             }
           }
         }
@@ -990,7 +1012,7 @@ export default function CustomerDetailScreen() {
     if (!customerToEdit) {
       console.error('Customer not found for editing:', customerName);
       console.log('Available customers:', customers.map(c => ({ id: c.id, name: c.name })));
-      Alert.alert('Error', 'Customer not found for editing');
+      Alert.alert(t('error'), t('customerNotFoundForEditing'));
       return;
     }
     
@@ -1134,17 +1156,22 @@ export default function CustomerDetailScreen() {
                 (globalThis as any).__deletedCustomerName = customerName;
                 console.log('✅ All caches cleared and refresh flag set');
                 
-                Alert.alert('Success', `Customer "${customerName}" and all ${customerTransactions.length} related transactions have been permanently deleted.`, [
+                Alert.alert(t('success'), `${t('customerAndTransactionsDeleted')}: "${customerName}" (${customerTransactions.length} ${customerTransactions.length === 1 ? t('transaction') : t('transactions')})`, [
                   {
-                    text: 'OK',
+                    text: t('ok'),
                     onPress: () => {
                       // Don't set loading flags - smooth navigation like Settings
                       delete (globalThis as any).__isReturningFromStatement;
                       
-                      // Small delay to ensure all refresh operations complete
-                      setTimeout(() => {
+                      // Android-specific: Use InteractionManager for smooth navigation after deletion
+                      if (Platform.OS === 'android') {
+                        InteractionManager.runAfterInteractions(() => {
+                          router.replace('/(tabs)/(home)/dashboard');
+                        });
+                      } else {
+                        // iOS: Direct navigation
                         router.replace('/(tabs)/(home)/dashboard');
-                      }, 100);
+                      }
                     }
                   }
                 ]);
@@ -1154,7 +1181,7 @@ export default function CustomerDetailScreen() {
               }
             } catch (error) {
               console.error('Error deleting customer:', error);
-              Alert.alert('Error', error instanceof Error ? error.message : 'Failed to delete customer');
+              Alert.alert(t('error'), error instanceof Error ? error.message : t('failedToDeleteCustomer'));
             }
           }
         }
@@ -1167,18 +1194,18 @@ export default function CustomerDetailScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Use router.replace for smooth navigation like Settings -> Home
-    // This prevents dashboard re-mounting and loading states
-    console.log('🔄 Customer Detail: Using smooth navigation to dashboard');
-    
-    // Don't set any loading flags - let dashboard stay smooth
     // Remove any existing flags that might cause loading states
     delete (globalThis as any).__isReturningFromStatement;
     
-    // Add a small delay for smoother transition
-    setTimeout(() => {
-      router.replace('/(tabs)/(home)/dashboard');
-    }, 100);
+    // Android-specific: Use InteractionManager for smooth back navigation
+    if (Platform.OS === 'android') {
+      InteractionManager.runAfterInteractions(() => {
+        router.back(); // Use router.back() for proper stack navigation
+      });
+    } else {
+      // iOS: Direct back navigation
+      router.back();
+    }
   };
 
   return (
@@ -1196,7 +1223,9 @@ export default function CustomerDetailScreen() {
               <ArrowLeft size={24} color="white" />
             </TouchableOpacity>
           ),
-
+          // CRITICAL: Android background to prevent white flash during back navigation
+          contentStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+          cardStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
         }} 
       />
 
@@ -1598,8 +1627,8 @@ export default function CustomerDetailScreen() {
         animationType="slide"
         onRequestClose={() => setInterestModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.interestModalContainer}>
+        <View style={[styles.modalOverlay, { backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.6)' }]}>
+          <View style={[styles.interestModalContainer, { backgroundColor: theme.colors.surface }]}>
             <LinearGradient
               colors={['#1E40AF', '#3B82F6']}
               style={styles.modalGradientHeader}
@@ -1621,21 +1650,24 @@ export default function CustomerDetailScreen() {
               </View>
             </LinearGradient>
 
-            <View style={styles.modalContent}>
-              <Text style={styles.modalDescription}>
+            <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.modalDescription, { color: theme.colors.textSecondary }]}>
                 {t('calculateInterestDescription') || 'Calculate interest based on customer transaction history. Principal amount and dates will be taken from transaction records.'}
               </Text>
 
               {/* Interest Rate Input */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>{t('monthlyInterestRate')} (%)</Text>
-                <View style={styles.inputContainer}>
+                <Text style={[styles.inputLabel, { color: isDark ? '#60a5fa' : '#1E40AF' }]}>{t('monthlyInterestRate')} (%)</Text>
+                <View style={[styles.inputContainer, { 
+                  borderColor: isDark ? theme.colors.border : '#DBEAFE',
+                  backgroundColor: theme.colors.background,
+                }]}>
                   <TextInputWithDoneBar
-                    style={styles.textInput}
+                    style={[styles.textInput, { color: theme.colors.text }]}
                     value={interestRate}
                     onChangeText={setInterestRate}
                     placeholder={t('enterInterestRate') || '2'}
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={isDark ? '#6b7280' : '#9CA3AF'}
                     keyboardType="numeric"
                     returnKeyType="next"
                   />
@@ -1652,7 +1684,10 @@ export default function CustomerDetailScreen() {
               {/* Action Buttons */}
               <View style={styles.modalActions}>
                 <TouchableOpacity
-                  style={styles.cancelButton}
+                  style={[styles.cancelButton, {
+                    borderColor: theme.colors.border,
+                    backgroundColor: theme.colors.background,
+                  }]}
                   onPress={() => {
                     // COPY DASHBOARD PERFECT TOUCH: Same haptic feedback
                     if (Platform.OS !== 'web') {
@@ -1666,7 +1701,7 @@ export default function CustomerDetailScreen() {
                   delayPressIn={0}
                   delayPressOut={0}
                 >
-                  <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
+                  <Text style={[styles.cancelButtonText, { color: theme.colors.textSecondary }]}>{t('cancel')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1701,7 +1736,7 @@ export default function CustomerDetailScreen() {
       </Modal>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
