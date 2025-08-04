@@ -81,6 +81,17 @@ const DashboardScreen = React.memo(function DashboardScreen() {
         ]);
         
         setTransactionEntries(allTransactions);
+        
+        // CRITICAL: Create persistent session cache immediately after first login data load
+        // This prevents loading on subsequent page navigations throughout the session
+        (globalThis as any).__latestTransactionData = {
+          transactions: allTransactions,
+          updatedAt: Date.now()
+        };
+        
+        // Create a persistent session flag to indicate we have valid data
+        (globalThis as any).__hasSessionData = true;
+        console.log('Dashboard: Persistent session cache created after login');
       }
     } catch (error) {
       console.error('Dashboard: Error refreshing data:', error);
@@ -93,8 +104,8 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       if (user) {
         // Check if we have fresh cached data first
         const cachedData = (globalThis as any).__latestTransactionData;
-        if (cachedData && (Date.now() - cachedData.updatedAt) < 5000) { // Use cache if less than 5 seconds old
-          console.log('Dashboard: Using real-time cached transaction data');
+        if (cachedData && (Date.now() - cachedData.updatedAt) < 600000) { // Use cache if less than 10 minutes old
+          console.log('Dashboard: Using 10-minute cached transaction data (no loading)');
           setTransactionEntries(cachedData.transactions);
           return;
         }
@@ -102,6 +113,13 @@ const DashboardScreen = React.memo(function DashboardScreen() {
         // Get fresh data silently without triggering global loading states
         const allTransactions = await getAllTransactionEntries();
         setTransactionEntries(allTransactions);
+        
+        // Update cache for future use and maintain session data flag
+        (globalThis as any).__latestTransactionData = {
+          transactions: allTransactions,
+          updatedAt: Date.now()
+        };
+        (globalThis as any).__hasSessionData = true;
         
         // Skip customer refresh to avoid loading loops - customers are less likely to change
         // The main calculation (TO RECEIVE/TO GIVE) depends on transaction entries which we just updated
@@ -146,9 +164,20 @@ const DashboardScreen = React.memo(function DashboardScreen() {
         };
       }
       
-      // Only refresh if we don't have data yet
+      // SETTINGS APPROACH: Only refresh if we have absolutely NO data (first time ever)
+      // This mimics how settings page works - no loading when navigating back from other pages
       if (transactionEntries.length === 0 && user && !transactionLoading && !customersLoading) {
-        handleDataRefresh();
+        // Check if we have cached data first to avoid loading (like settings → home)
+        const cachedData = (globalThis as any).__latestTransactionData;
+        const hasSessionData = (globalThis as any).__hasSessionData;
+        
+        if (cachedData && hasSessionData && (Date.now() - cachedData.updatedAt) < 600000) { // Use cache if less than 10 minutes old AND we have session data
+          console.log('Dashboard: Using persistent session cache to avoid loading (settings approach)');
+          setTransactionEntries(cachedData.transactions);
+        } else {
+          // Only show loading if we truly have no data and no cache (first app launch)
+          handleDataRefresh();
+        }
       }
 
       return () => {
@@ -159,7 +188,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
           refreshTimeoutRef.current = null;
         }
       };
-    }, [transactionEntries.length, user, transactionLoading, customersLoading, handleDataRefresh])
+    }, [transactionEntries.length, user, transactionLoading, customersLoading, handleDataRefresh, handleSilentRefresh])
   );
 
   // 🚀 CUSTOMER DETAIL APPROACH: No initial load needed - start fresh always
