@@ -477,13 +477,20 @@ export default function SignInScreen() {
                  marginBottom: getResponsiveSize(24, 28, 32),
                }]} 
                onPress={() => {
+                 // INSTANT haptic feedback for maximum responsiveness
+                 if (Platform.OS !== 'web') {
+                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                 }
                  Keyboard.dismiss();
-                 setTimeout(() => {
-                   isOtpSent ? handleVerifyOtp() : handleSendOtp(false);
-                 }, 100);
+                 // Remove delay for instant response
+                 isOtpSent ? handleVerifyOtp() : handleSendOtp(false);
                }}
                disabled={isLoading || (isOtpSent && otpExpired)}
-               activeOpacity={0.8}
+               activeOpacity={0.2}
+               hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+               pressRetentionOffset={{ top: 20, bottom: 20, left: 20, right: 20 }}
+               delayPressIn={0}
+               delayPressOut={0}
              >
                <LinearGradient
                  colors={['#2563eb', '#1d4ed8']}

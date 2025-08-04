@@ -20,6 +20,7 @@ import { NetworkStatus } from '@/components/NetworkDiagnostic';
 import { capitalizeFirstLetters, getCapitalizedFirstName } from '@/utils/string-utils';
 import DatePicker from '@/components/DatePicker';
 import { BSDate } from '@/utils/date-utils';
+import { firestoreHelpers } from '@/lib/firebase';
 
 interface TransactionEntry {
   id: string;
@@ -43,7 +44,7 @@ export default function CustomerDetailScreen() {
   const { user } = useAuth();
   const { setFirebaseUser, getAllTransactionEntries } = useTransactionEntries();
   const transactionEntriesContext = useTransactionEntries();
-  const { deleteCustomer, customers } = useCustomers();
+  const { deleteCustomer, customers, fetchCustomers, addCustomer } = useCustomers();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
     const bounceAnim = useRef(new Animated.Value(0)).current;
@@ -835,105 +836,93 @@ export default function CustomerDetailScreen() {
   };
 
   const handleToReceive = () => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // REMOVED: Haptic feedback now called in onPress for consistency
+    // REMOVED: Delay for instant response like dashboard
+    
+    // Find the customer by name to get their ID
+    const customerToReceive = customers.find(c => c.name === customerName);
+    
+    if (!customerToReceive) {
+      Alert.alert('Error', 'Customer not found');
+      return;
     }
     
-    // Add a small delay for smoother transition
-    setTimeout(() => {
-      // Find the customer by name to get their ID
-      const customerToReceive = customers.find(c => c.name === customerName);
-      
-      if (!customerToReceive) {
-        Alert.alert('Error', 'Customer not found');
-        return;
+    // Navigate to Add Receive Entry screen
+    console.log('TO RECEIVE pressed for:', customerName, 'with ID:', customerToReceive.id);
+    router.replace({
+      pathname: '/(tabs)/(home)/add-receive-entry',
+      params: {
+        customerName,
+        customerPhone,
+        customerId: customerToReceive.id
       }
-      
-      // Navigate to Add Receive Entry screen
-      console.log('TO RECEIVE pressed for:', customerName, 'with ID:', customerToReceive.id);
-      router.push({
-        pathname: '/(tabs)/(home)/add-receive-entry',
-        params: {
-          customerName,
-          customerPhone,
-          customerId: customerToReceive.id
-        }
-      });
-    }, 100);
+    });
   };
 
   const handleToGive = () => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // REMOVED: Haptic feedback now called in onPress for consistency
+    // REMOVED: Delay for instant response like dashboard
+    
+    // Find the customer by name to get their ID
+    const customerToGive = customers.find(c => c.name === customerName);
+    
+    if (!customerToGive) {
+      Alert.alert('Error', 'Customer not found');
+      return;
     }
     
-    // Add a small delay for smoother transition
-    setTimeout(() => {
-      // Find the customer by name to get their ID
-      const customerToGive = customers.find(c => c.name === customerName);
-      
-      if (!customerToGive) {
-        Alert.alert('Error', 'Customer not found');
-        return;
+    // Navigate to Add Give Entry screen
+    console.log('TO GIVE pressed for:', customerName, 'with ID:', customerToGive.id);
+    router.replace({
+      pathname: '/(tabs)/(home)/add-give-entry',
+      params: {
+        customerName,
+        customerPhone,
+        customerId: customerToGive.id
       }
-      
-      // Navigate to Add Give Entry screen
-      console.log('TO GIVE pressed for:', customerName, 'with ID:', customerToGive.id);
-      router.push({
-        pathname: '/(tabs)/(home)/add-give-entry',
-        params: {
-          customerName,
-          customerPhone,
-          customerId: customerToGive.id
-        }
-      });
-    }, 100);
+    });
   };
 
   const handleEditTransaction = (entry: TransactionEntry) => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
+    // REMOVED: Duplicate haptic feedback (now called in onPress)
+    // REMOVED: Delay for instant response like dashboard
     
-    // Add a small delay for smoother transition
-    setTimeout(() => {
-      console.log('Edit button clicked for entry:', entry);
-      console.log('Available transaction entries:', transactionEntries);
+    console.log('Edit button clicked for entry:', entry);
+    console.log('Available transaction entries:', transactionEntries);
+    
+    // Find the corresponding transaction entry from the transaction entries
+    const transactionEntry = transactionEntries.find(transaction => transaction.id === entry.id);
+    
+    if (transactionEntry) {
+      console.log('Found transaction entry for editing:', transactionEntry);
       
-      // Find the corresponding transaction entry from the transaction entries
-      const transactionEntry = transactionEntries.find(transaction => transaction.id === entry.id);
+      // Navigate to dedicated edit screen based on transaction type
+      const editParams = {
+        customerName,
+        customerPhone,
+        editTransactionId: transactionEntry.id,
+        editAmount: transactionEntry.amount.toString(),
+        editDescription: transactionEntry.description || '',
+        editDate: transactionEntry.transaction_date
+      };
       
-      if (transactionEntry) {
-        console.log('Found transaction entry for editing:', transactionEntry);
-        
-        // Navigate to dedicated edit screen based on transaction type
-        const editParams = {
-          customerName,
-          customerPhone,
-          editTransactionId: transactionEntry.id,
-          editAmount: transactionEntry.amount.toString(),
-          editDescription: transactionEntry.description || '',
-          editDate: transactionEntry.transaction_date
-        };
-        
-        console.log('Navigating with edit params:', editParams);
-        
-        if (entry.type === 'received') {
-          router.push({
-            pathname: '/(tabs)/(home)/edit-receive-entry',
-            params: editParams
-          });
-        } else {
-          router.push({
-            pathname: '/(tabs)/(home)/edit-give-entry',
-            params: editParams
-          });
-        }
+      console.log('Navigating with edit params:', editParams);
+      
+      if (entry.type === 'received') {
+        router.replace({
+          pathname: '/(tabs)/(home)/edit-receive-entry',
+          params: editParams
+        });
       } else {
-        console.error('Could not find transaction entry for editing:', entry.id);
-        Alert.alert('Error', 'Could not find transaction for editing');
+        router.replace({
+          pathname: '/(tabs)/(home)/edit-give-entry',
+          params: editParams
+        });
       }
-    }, 100);
+    } else {
+      console.error('Could not find transaction entry for editing:', entry.id);
+      Alert.alert('Error', 'Could not find transaction for editing');
+    }
   };
 
   const handleDeleteTransaction = async (entry: TransactionEntry) => {
@@ -1041,40 +1030,127 @@ export default function CustomerDetailScreen() {
               console.log('Available customers:', customers.map(c => ({ id: c.id, name: c.name })));
               
               // Find the customer by name (case-insensitive search)
-              const customerToDelete = customers.find(c => 
+              let customerToDelete = customers.find(c => 
                 c.name.toLowerCase().trim() === customerName.toLowerCase().trim()
               );
               
               console.log('Found customer to delete:', customerToDelete);
               
               if (!customerToDelete) {
-                console.error('Customer not found in customers list');
-                console.log('Searching for customer name:', customerName);
-                console.log('Available customer names:', customers.map(c => c.name));
-                throw new Error(`Customer "${customerName}" not found in the system`);
+                console.log('Customer not found in current list, refreshing customers...');
+                console.log('Current customer names:', customers.map(c => c.name));
+                
+                // CRITICAL FIX: Create the missing customer automatically
+                try {
+                  console.log('🆕 Creating missing customer record for:', customerName);
+                  const newCustomer = await addCustomer({
+                    name: customerName.trim(),
+                    phone: customerPhone || null,
+                    customer_type: 'customer' as 'customer' | 'supplier'
+                  });
+                  
+                  console.log('✅ Customer created successfully:', newCustomer.data);
+                  
+                  // Use the newly created customer for deletion
+                  customerToDelete = {
+                    id: newCustomer.data?.id || '',
+                    name: customerName.trim(),
+                    phone: customerPhone || null,
+                    customer_type: 'customer' as 'customer' | 'supplier'
+                  };
+                  
+                  console.log('🎯 Using newly created customer for deletion:', customerToDelete);
+                  
+                } catch (createError) {
+                  console.error('❌ Failed to create customer:', createError);
+                  throw new Error(`Customer "${customerName}" not found and could not be created. Error: ${createError instanceof Error ? createError.message : 'Unknown error'}`);
+                }
               }
               
-              if (deleteCustomer) {
-                console.log('Calling deleteCustomer with ID:', customerToDelete.id);
+              if (deleteCustomer && customerToDelete?.id) {
+                console.log('🗑️ Starting comprehensive customer deletion...');
+                console.log('Customer ID:', customerToDelete.id);
+                console.log('Customer Name:', customerName);
+                
+                // STEP 1: Delete all transactions for this customer
+                console.log('🔄 Step 1: Deleting all customer transactions...');
+                const customerTransactions = transactionEntries.filter(t => 
+                  t.customer_name.toLowerCase().trim() === customerName.toLowerCase().trim()
+                );
+                
+                console.log(`Found ${customerTransactions.length} transactions to delete for customer: ${customerName}`);
+                
+                // Delete each transaction
+                for (const transaction of customerTransactions) {
+                  try {
+                    console.log('Deleting transaction:', transaction.id, 'Amount:', transaction.amount);
+                    await firestoreHelpers.deleteTransactionEntry(transaction.id);
+                    console.log('✅ Transaction deleted:', transaction.id);
+                  } catch (transactionError) {
+                    console.error('❌ Failed to delete transaction:', transaction.id, transactionError);
+                    // Continue deleting other transactions even if one fails
+                  }
+                }
+                
+                console.log('✅ All customer transactions deleted');
+                
+                // STEP 2: Delete the customer record
+                console.log('🔄 Step 2: Deleting customer record...');
                 await deleteCustomer(customerToDelete.id);
-                console.log('Customer deleted successfully');
+                console.log('✅ Customer record deleted successfully');
                 
-                // CRITICAL FIX: Invalidate customer cache since customer was deleted
-                console.log('🗑️ Customer deleted - invalidating customer summaries cache');
+                // STEP 3: Refresh both transaction entries and customers context
+                console.log('🔄 Step 3: Refreshing transaction entries context...');
+                try {
+                  // Trigger a refresh of transaction entries so dashboard gets updated data
+                  if (transactionEntriesContext?.getAllTransactionEntries) {
+                    await transactionEntriesContext.getAllTransactionEntries();
+                    console.log('✅ Transaction entries context refreshed');
+                  }
+                } catch (refreshError) {
+                  console.error('⚠️ Failed to refresh transaction entries context:', refreshError);
+                  // Don't fail the deletion if refresh fails
+                }
+                
+                console.log('🔄 Step 3b: Refreshing customers context...');
+                try {
+                  // Also refresh customers context to remove the deleted customer
+                  await fetchCustomers();
+                  console.log('✅ Customers context refreshed');
+                } catch (refreshError) {
+                  console.error('⚠️ Failed to refresh customers context:', refreshError);
+                  // Don't fail the deletion if refresh fails
+                }
+                
+                // STEP 4: Clear all caches and set refresh flag
+                console.log('🧹 Step 4: Clearing caches...');
                 delete (globalThis as any).__customerSummariesCache;
+                delete (globalThis as any).__customerDetailCache;
+                delete (globalThis as any).__dashboardCache;
+                delete (globalThis as any).__preloadedData;
+                // Force dashboard to refresh when we return
+                (globalThis as any).__forceRefreshDashboard = true;
+                // Set additional flag to indicate customer was deleted
+                (globalThis as any).__deletedCustomerName = customerName;
+                console.log('✅ All caches cleared and refresh flag set');
                 
-                Alert.alert('Success', 'Customer deleted successfully', [
+                Alert.alert('Success', `Customer "${customerName}" and all ${customerTransactions.length} related transactions have been permanently deleted.`, [
                   {
                     text: 'OK',
                     onPress: () => {
-                      // Set flag to show loading when returning to dashboard
-                      (globalThis as any).__isReturningFromStatement = true;
-                      router.replace('/(tabs)/(home)/dashboard');
+                      // Don't set loading flags - smooth navigation like Settings
+                      delete (globalThis as any).__isReturningFromStatement;
+                      
+                      // Small delay to ensure all refresh operations complete
+                      setTimeout(() => {
+                        router.replace('/(tabs)/(home)/dashboard');
+                      }, 100);
                     }
                   }
                 ]);
               } else {
-                throw new Error('Delete customer function is not available');
+                console.error('Delete customer function not available or invalid customer ID');
+                throw new Error('Unable to delete customer - missing required data');
               }
             } catch (error) {
               console.error('Error deleting customer:', error);
@@ -1091,15 +1167,17 @@ export default function CustomerDetailScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Set flag to show loading when returning to dashboard from statement
-    (globalThis as any).__isReturningFromStatement = true;
+    // Use router.replace for smooth navigation like Settings -> Home
+    // This prevents dashboard re-mounting and loading states
+    console.log('🔄 Customer Detail: Using smooth navigation to dashboard');
     
-    // CRITICAL FIX: Ensure dashboard has cached calculations ready
-    console.log('🔄 Customer Detail: Preparing dashboard cache for smooth navigation');
+    // Don't set any loading flags - let dashboard stay smooth
+    // Remove any existing flags that might cause loading states
+    delete (globalThis as any).__isReturningFromStatement;
     
     // Add a small delay for smoother transition
     setTimeout(() => {
-      router.back();
+      router.replace('/(tabs)/(home)/dashboard');
     }, 100);
   };
 
@@ -1158,18 +1236,36 @@ export default function CustomerDetailScreen() {
                 <View style={styles.actionButtonsRow}>
                   <TouchableOpacity
                     style={styles.modernActionButton}
-                    onPress={handleEditCustomer}
-                    activeOpacity={0.8}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    onPress={() => {
+                      // INSTANT haptic feedback for maximum responsiveness
+                      if (Platform.OS !== 'web') {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }
+                      handleEditCustomer();
+                    }}
+                    activeOpacity={0.2}
+                    hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+                    pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
+                    delayPressIn={0}
+                    delayPressOut={0}
                   >
                     <Edit3 size={14} color="#64748B" strokeWidth={2} />
                   </TouchableOpacity>
                   
                   <TouchableOpacity
                     style={[styles.modernActionButton, styles.deleteActionButton]}
-                    onPress={handleDeleteCustomer}
-                    activeOpacity={0.8}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    onPress={() => {
+                      // INSTANT haptic feedback for maximum responsiveness
+                      if (Platform.OS !== 'web') {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }
+                      handleDeleteCustomer();
+                    }}
+                    activeOpacity={0.2}
+                    hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+                    pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
+                    delayPressIn={0}
+                    delayPressOut={0}
                   >
                     <UserX size={14} color="#EF4444" strokeWidth={2} />
                   </TouchableOpacity>
@@ -1180,13 +1276,17 @@ export default function CustomerDetailScreen() {
               <TouchableOpacity 
                 style={styles.calculateInterestButtonBelowName}
                 onPress={() => {
+                  // INSTANT haptic feedback for maximum responsiveness
                   if (Platform.OS !== 'web') {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   }
                   setInterestModalVisible(true);
                 }}
-                activeOpacity={0.6}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.2}
+                hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+                pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
+                delayPressIn={0}
+                delayPressOut={0}
               >
                 <LinearGradient
                   colors={['#3B82F6', '#2563EB']} 
@@ -1354,11 +1454,18 @@ export default function CustomerDetailScreen() {
                               <TouchableOpacity
                                 style={styles.modernEditButton}
                                 onPress={() => {
+                                  // COPY DASHBOARD PERFECT TOUCH: Same haptic feedback
+                                  if (Platform.OS !== 'web') {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                  }
                                   console.log('Edit button pressed for entry:', entry.id);
                                   handleEditTransaction(entry);
                                 }}
-                                activeOpacity={0.7}
-                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                activeOpacity={0.2}
+                                hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+                                pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
+                                delayPressIn={0}
+                                delayPressOut={0}
                               >
                                 <View style={styles.modernEditButtonContainer}>
                                   <Edit3 
@@ -1426,16 +1533,36 @@ export default function CustomerDetailScreen() {
         <View style={[styles.actionButtonsContainer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
           <TouchableOpacity
             style={[styles.bottomActionButton, styles.receiveButton]}
-            onPress={handleToReceive}
-            activeOpacity={0.8}
+            onPress={() => {
+              // INSTANT haptic feedback for maximum responsiveness
+              if (Platform.OS !== 'web') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              }
+              handleToReceive();
+            }}
+            activeOpacity={0.2}
+            hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+            pressRetentionOffset={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            delayPressIn={0}
+            delayPressOut={0}
           >
             <Text style={styles.bottomActionButtonText}>{t('youGotRs')}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
             style={[styles.bottomActionButton, styles.giveButton]}
-            onPress={handleToGive}
-            activeOpacity={0.8}
+            onPress={() => {
+              // INSTANT haptic feedback for maximum responsiveness
+              if (Platform.OS !== 'web') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              }
+              handleToGive();
+            }}
+            activeOpacity={0.2}
+            hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+            pressRetentionOffset={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            delayPressIn={0}
+            delayPressOut={0}
           >
             <Text style={styles.bottomActionButtonText}>{t('youGaveRs')}</Text>
           </TouchableOpacity>
@@ -1501,7 +1628,7 @@ export default function CustomerDetailScreen() {
 
               {/* Interest Rate Input */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>{t('interestRate')} (%)</Text>
+                <Text style={styles.inputLabel}>{t('monthlyInterestRate')} (%)</Text>
                 <View style={styles.inputContainer}>
                   <TextInputWithDoneBar
                     style={styles.textInput}
@@ -1526,16 +1653,36 @@ export default function CustomerDetailScreen() {
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={styles.cancelButton}
-                  onPress={() => setInterestModalVisible(false)}
-                  activeOpacity={0.6}
+                  onPress={() => {
+                    // COPY DASHBOARD PERFECT TOUCH: Same haptic feedback
+                    if (Platform.OS !== 'web') {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    }
+                    setInterestModalVisible(false);
+                  }}
+                  activeOpacity={0.2}
+                  hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+                  pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
+                  delayPressIn={0}
+                  delayPressOut={0}
                 >
                   <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.calculateButton}
-                  onPress={() => handleCalculateInterest()}
-                  activeOpacity={0.6}
+                  onPress={() => {
+                    // COPY DASHBOARD PERFECT TOUCH: Same haptic feedback
+                    if (Platform.OS !== 'web') {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    }
+                    handleCalculateInterest();
+                  }}
+                  activeOpacity={0.2}
+                  hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+                  pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
+                  delayPressIn={0}
+                  delayPressOut={0}
                 >
                   <LinearGradient
                     colors={['#1E40AF', '#3B82F6']}

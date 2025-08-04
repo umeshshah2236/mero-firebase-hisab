@@ -79,25 +79,25 @@ export default function HomeScreen() {
   };
 
   const handleFeaturePress = (route: string) => {
+    // INSTANT haptic feedback for maximum responsiveness
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    setTimeout(() => {
-      router.push(route as any);
-    }, 200);
+    // Remove delay for instant navigation
+    router.push(route as any);
   };
 
   const handleTrackLoansPress = () => {
+    // INSTANT haptic feedback for maximum responsiveness
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    setTimeout(() => {
-      if (!isAuthenticated) {
-        router.push('/auth/sign-in');
-      } else {
-        router.push('/(tabs)/(home)/dashboard');
-      }
-    }, 100);
+    // Remove delay for instant navigation
+    if (!isAuthenticated) {
+      router.push('/auth/sign-in');
+    } else {
+      router.push('/(tabs)/(home)/dashboard');
+    }
   };
 
   const getGreeting = () => {
@@ -350,19 +350,23 @@ export default function HomeScreen() {
                       paddingHorizontal: getResponsivePadding(isVerySmallScreen ? 18 : isSmallScreen ? 22 : 28),
                       paddingVertical: getResponsivePadding(isVerySmallScreen ? 10 : isSmallScreen ? 12 : 14),
                       backgroundColor: 'transparent',
-                      // iOS gets press animation, Android stays static
-                      opacity: Platform.OS === 'ios' ? (pressed ? 0.85 : 1) : 1,
+                      // MAXIMUM RESPONSIVENESS: Both platforms get instant press animation
+                      opacity: pressed ? 0.7 : 1,
+                      transform: [{ scale: pressed ? 0.98 : 1 }],
                     }
                   ]}
                   onPress={() => {
+                    // INSTANT haptic feedback for maximum responsiveness
                     if (Platform.OS !== 'web') {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     }
                     handleTrackLoansPress();
                   }}
-                  // Android gets no ripple effect at all
-                  android_ripple={Platform.OS === 'android' ? null : undefined}
-                  android_disableSound={true}
+                  // Enable ripple for better touch feedback
+                  android_ripple={Platform.OS === 'android' ? { color: 'rgba(255,255,255,0.2)', borderless: false } : undefined}
+                  android_disableSound={false}
+                  hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+                  pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
                 >
                   {/* Decorative Border */}
                   <View style={[styles.nepaliButtonBorder, { backgroundColor: 'transparent' }]}>

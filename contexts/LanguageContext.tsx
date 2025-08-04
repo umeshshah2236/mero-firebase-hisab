@@ -153,6 +153,8 @@ const translations = {
     totalAmountDueWithInterest: 'Total Amount Due (with Interest)',
     totalRepaidWithInterest: 'Total Repaid (with Interest)',
     calculationError: 'Error calculating interest',
+    calculationBreakdownExplanation: 'Here is the detailed breakdown of all transactions and calculated interest:',
+    withInterestCalculation: 'After adding interest calculations:',
     
     // Settings
     language: 'Language',
@@ -513,6 +515,8 @@ This app is perfect for financial planning, loan calculations, and investment pr
     totalAmountDueWithInterest: 'कुल तिर्नुपर्ने रकम (ब्याजसहित)',
     totalRepaidWithInterest: 'कुल फिर्ता (ब्याजसहित)',
     calculationError: 'ब्याज गणना गर्दा त्रुटि',
+    calculationBreakdownExplanation: 'यहाँ सबै लेनदेनहरू र गणना गरिएको ब्याजको विस्तृत विवरण छ:',
+    withInterestCalculation: 'ब्याज गणना थपेपछि:',
     
     // Settings
     language: 'भाषा',

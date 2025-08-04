@@ -134,8 +134,15 @@ export default function EditReceiveEntryScreen() {
       
       console.log('Receive entry updated successfully');
       
-      // Use router.back() for consistent behavior
-      router.back();
+      // Return to customer statement page if we came from there
+      if (customerName) {
+        router.replace({
+          pathname: '/(tabs)/(home)/customer-detail',
+          params: { customerName }
+        });
+      } else {
+        router.replace('/(tabs)/(home)/dashboard');
+      }
       
     } catch (error) {
       console.error('Error updating receive entry:', error);
@@ -168,8 +175,15 @@ export default function EditReceiveEntryScreen() {
         await deleteTransactionEntry(editTransactionId);
         console.log('Transaction deleted successfully');
         
-        // Navigate back immediately
-        router.back();
+        // Return to customer statement page if we came from there
+        if (customerName) {
+          router.replace({
+            pathname: '/(tabs)/(home)/customer-detail',
+            params: { customerName }
+          });
+        } else {
+          router.replace('/(tabs)/(home)/dashboard');
+        }
       } catch (error) {
         console.error('Error deleting entry:', error);
         const errorMessage = error instanceof Error ? error.message : t('failedToDeleteEntry');
@@ -213,9 +227,17 @@ export default function EditReceiveEntryScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Add a small delay for smoother transition
+    // If we have customerName, return to that customer's statement page
+    // Otherwise, go to dashboard
     setTimeout(() => {
-      router.back();
+      if (customerName) {
+        router.replace({
+          pathname: '/(tabs)/(home)/customer-detail',
+          params: { customerName }
+        });
+      } else {
+        router.replace('/(tabs)/(home)/dashboard');
+      }
     }, 100);
   };
 

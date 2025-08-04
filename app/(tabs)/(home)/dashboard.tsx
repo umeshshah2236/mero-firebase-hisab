@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Dimensions, RefreshControl, SafeAreaView, Animated, Linking } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Dimensions, RefreshControl, SafeAreaView, Animated, Linking, InteractionManager } from 'react-native';
 import TextInputWithDoneBar from '@/components/TextInputWithDoneBar';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { Plus, User, Users, Search, TrendingUp, TrendingDown, Clock, Phone, MessageCircle, Heart } from 'lucide-react-native';
@@ -38,64 +38,35 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   const { theme, isDark } = useTheme();
   const { user, firebaseUser, isAuthenticated, isLoading: authLoading, refreshSession } = useAuth();
   const insets = useSafeAreaInsets();
-  const { loading: transactionLoading, error: transactionError, setFirebaseUser, getAllTransactionEntries } = useTransactionEntries();
-  const { customers, loading: customersLoading, error: customersError, fetchCustomers, setFirebaseUser: setCustomersFirebaseUser } = useCustomers();
+  const { getAllTransactionEntries, setFirebaseUser, loading: transactionLoading, error: transactionError } = useTransactionEntries();
+  const { customers, fetchCustomers, setFirebaseUser: setCustomersFirebaseUser, loading: customersLoading, error: customersError, addCustomer } = useCustomers();
 
+  // STATEMENT PAGE APPROACH: Initialize with real data immediately (like statement page)
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('customers');
   const [searchQuery, setSearchQuery] = useState('');
-  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(true); // Start as true like customer detail
-  const [hasRedirected, setHasRedirected] = useState(false);
-  
-  // 🚀 CUSTOMER DETAIL APPROACH: Initialize with immediate data from context
+  // CRITICAL FIX: Initialize with context data immediately (like statement page initialTransactions)
   const [transactionEntries, setTransactionEntries] = useState<TransactionEntry[]>(() => {
-    // Try to get data from preloaded cache first
-    const preloadedData = (globalThis as any).__preloadedData;
-    if (preloadedData?.uiReady && preloadedData?.transactions) {
-      console.log('🚀 Dashboard: Initializing with preloaded transactions for instant display');
-      return preloadedData.transactions;
-    }
-    
-    // Start with empty but immediately mark as having fresh data to prevent loading state
-    console.log('🚀 Dashboard: CUSTOMER DETAIL APPROACH - Starting with fresh state');
-    return [];
+    // Try to get initial data from context (like statement page getCachedTransactions)
+    console.log('🚀 Dashboard: Initializing with immediate context data');
+    return []; // Will be populated immediately by useEffect
   });
-  const [forceUpdate, setForceUpdate] = useState(0);
-  
-  // 🚀 STATEMENT PAGE APPROACH: Start with fresh data flag as true
-  const [hasFreshTransactionData, setHasFreshTransactionData] = useState(true); // Always start as true like statement page
-  
-  // Remove loading state - not needed with statement page approach
-  const [isInitialLoad, setIsInitialLoad] = useState(false); // Start as false - no loading needed
-  
-  // Track if screen is focused - ALL useState MUST BE TOGETHER
   const [isScreenFocused, setIsScreenFocused] = useState(false);
-  
-  // Customer loading state - specifically for when returning from statement pages
-  const [isCustomerDataLoading, setIsCustomerDataLoading] = useState(false);
-  const [isReturningFromStatement, setIsReturningFromStatement] = useState(false);
-
-  // Silent background update tracking (like statement page)
-  const [previousTransactionCount, setPreviousTransactionCount] = useState(0);
-  const [previousCustomerCount, setPreviousCustomerCount] = useState(0);
-  const lastDataUpdateRef = useRef(0);
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   // Redirect to home if user is not authenticated - optimized for smooth transitions
   useEffect(() => {
     if (!authLoading && !isAuthenticated && !hasRedirected) {
       console.log('Dashboard: User not authenticated, redirecting to home');
       setHasRedirected(true);
-      setHasInitiallyLoaded(false); // Reset initial load state on logout
-      // Use immediate navigation for smooth sign out transition
       router.replace('/(tabs)/(home)');
     } else if (!authLoading && isAuthenticated && hasRedirected) {
-      // Reset redirect flag when user becomes authenticated again
       console.log('Dashboard: User authenticated, resetting redirect flag');
       setHasRedirected(false);
     }
   }, [isAuthenticated, authLoading, hasRedirected]);
 
-  // Update both contexts with current user
+  // Update both contexts with current user (like statement page)
   useEffect(() => {
     if (firebaseUser) {
       setFirebaseUser(firebaseUser);
@@ -103,161 +74,69 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     }
   }, [firebaseUser, setFirebaseUser, setCustomersFirebaseUser]);
 
-  // ALL useRef hooks must be with other hooks at the top
-  const customerTransactionsCache = React.useRef(new Map<string, TransactionEntry[]>()).current;
-  const balanceRef = React.useRef((() => {
-    // Try to restore from global cache if available to prevent intermediate screen flash
-    const globalCache = (globalThis as any).__dashboardCache;
-    if (globalCache?.ready) {
-      console.log('🚀 Dashboard: Restoring balance from global cache:', globalCache);
-      return globalCache;
-    }
-    
-    // Default initialization - but don't show "All settled" initially
-    return { 
-      toReceive: 0, 
-      toGive: 0, 
-      ready: false, 
-      lastStatus: 'Loading...' // Remember the last status text
-    };
-  })());
+  // FIXED: Remove duplicate data loading - only use focus effect for data refresh
+  // This useEffect was causing infinite loops by competing with useFocusEffect
 
-  // Build transaction cache efficiently - MOVED TO TOP
-  React.useEffect(() => {
-    console.log('Dashboard: Building FAST transaction cache');
-    customerTransactionsCache.clear();
-    
-    transactionEntries.forEach((transaction) => {
-      const customerName = transaction.customer_name;
-      if (!customerTransactionsCache.has(customerName)) {
-        customerTransactionsCache.set(customerName, []);
-      }
-      customerTransactionsCache.get(customerName)!.push(transaction);
-    });
-    
-    console.log('Dashboard: Transaction cache built for', customerTransactionsCache.size, 'customers');
-  }, [transactionEntries]);
-
-  // 🚀 STATEMENT PAGE APPROACH: Silent background refresh (no UI disruption)
-  const handleSilentBackgroundRefresh = React.useCallback(async () => {
-    console.log('Dashboard: Silent background refresh called (Statement page approach)');
-    console.log('🐛 Auth state - isAuthenticated:', isAuthenticated, 'user:', !!user);
+  // STATEMENT PAGE APPROACH: Simple data refresh
+  const handleDataRefresh = React.useCallback(async () => {
+    console.log('Dashboard: Refreshing data (statement page approach)');
     
     try {
-      if (isAuthenticated && user) {
-        console.log('Dashboard: Fetching data silently in background...');
-        const [customersResult, entriesResult] = await Promise.all([
-          fetchCustomers(false), // Silent fetch
-          getAllTransactionEntries()
+      if (user) {
+        const [allTransactions] = await Promise.all([
+          getAllTransactionEntries(),
+          fetchCustomers(false)
         ]);
         
-        console.log('Dashboard: Silent background data fetched');
-        console.log('Customers:', Array.isArray(customersResult) ? customersResult.length : 0, 'Transactions:', entriesResult?.length || 0);
-        
-        // Only update if data actually changed (prevents unnecessary re-renders)
-        const newTransactionCount = entriesResult?.length || 0;
-        const newCustomerCount = Array.isArray(customersResult) ? customersResult.length : 0;
-        
-        // Always update both transaction entries and force customers refresh
-        console.log('Dashboard: Updating data silently');
-        setTransactionEntries(entriesResult || []);
-        
-        // Force customers to be refreshed if data is different
-        if (newTransactionCount !== transactionEntries.length || 
-            newCustomerCount !== customers.length) {
-          console.log('Dashboard: Data has changed - forcing customers refresh');
-          // Force a context refresh to ensure customers are updated
-          fetchCustomers(true); // Force refresh
-        }
-        
-        setHasFreshTransactionData(true);
-        
-        // Force UI recalculation after silent refresh
-        setForceUpdate(prev => prev + 1);
-        console.log('🔄 Silent refresh completed, triggering UI recalculation');
-        
-        // Hide customer loading state once data is ready
-        if (isReturningFromStatement && isCustomerDataLoading) {
-          console.log('🏠 Dashboard: Data loaded - hiding customer loading state');
-          setTimeout(() => {
-            setIsCustomerDataLoading(false);
-            setIsReturningFromStatement(false);
-          }, 100); // Small delay to ensure UI has updated
-        }
-      } else {
-        console.log('🚨 Dashboard: Cannot refresh data - user not authenticated or missing');
-        console.log('🐛 isAuthenticated:', isAuthenticated, 'user exists:', !!user);
-        
-        // Hide loading state even if refresh fails
-        if (isCustomerDataLoading) {
-          setIsCustomerDataLoading(false);
-          setIsReturningFromStatement(false);
-        }
+        setTransactionEntries(allTransactions);
+        console.log('Dashboard: Data refreshed successfully');
       }
     } catch (error) {
-      console.error('Dashboard: Error in silent background refresh:', error);
-      // Silent error handling - don't disrupt UI
-      
-      // Hide loading state on error
-      if (isCustomerDataLoading) {
-        setIsCustomerDataLoading(false);
-        setIsReturningFromStatement(false);
-      }
+      console.error('Dashboard: Error refreshing data:', error);
     }
-  }, [isAuthenticated, user, getAllTransactionEntries, fetchCustomers, transactionEntries.length, customers.length, isReturningFromStatement, isCustomerDataLoading]);
+  }, [user, getAllTransactionEntries, fetchCustomers]);
+
+
 
   // Simple approach: Always refresh data when screen is focused, but completely silently
   // This ensures data is always current without any visual reload behavior
 
-  // 🎯 SIMPLE FIX: Always load data on focus but make it completely invisible
+  // FIXED: Only refresh data on initial focus, not every time
   useFocusEffect(
     React.useCallback(() => {
-      console.log('Dashboard: Screen focused - loading data silently');
+      console.log('Dashboard: Screen focused - checking if data refresh needed');
       setIsScreenFocused(true);
       
-      // Check if we're returning from a statement page (customer-detail)
-      const isComingFromStatement = (globalThis as any).__isReturningFromStatement;
-      if (isComingFromStatement) {
-        console.log('🏠 Dashboard: Returning from statement page - show loading');
-        setIsReturningFromStatement(true);
-        setIsCustomerDataLoading(true);
-        delete (globalThis as any).__isReturningFromStatement;
+      // Check if forced refresh is required (after customer deletion)
+      if ((globalThis as any).__forceRefreshDashboard) {
+        console.log('🔄 Dashboard: Force refresh requested after customer deletion');
+        delete (globalThis as any).__forceRefreshDashboard;
+        
+        // CRITICAL: Clear all state and force complete reload
+        console.log('🧹 Dashboard: Clearing all local state before refresh');
+        setTransactionEntries([]);
+        
+        // Force a complete data refresh
+        handleDataRefresh();
+        return () => {
+          console.log('Dashboard: Screen unfocused');
+          setIsScreenFocused(false);
+        };
       }
       
-      // Clear preloaded data flag if it exists
-      const preloadedData = (globalThis as any).__preloadedData;
-      if (preloadedData?.uiReady) {
-        console.log('Dashboard: Clearing preloaded data flag');
-        delete (globalThis as any).__preloadedData;
-      }
-      
-      // ALWAYS refresh data on focus, but silently in background
-      // This ensures data is always current, no visual reload behavior
-      console.log('Dashboard: Always refreshing data silently on focus');
-      console.log('🐛 Current data state - Customers:', customers.length, 'Transactions:', transactionEntries.length);
-      
-      // Check for force refresh flag from disabled Home button click
-      const forceHomeRefresh = (globalThis as any).__forceHomeRefresh;
-      if (forceHomeRefresh && (Date.now() - forceHomeRefresh) < 2000) {
-        console.log('🏠 Detected Home button click while at home - forcing data refresh');
-        delete (globalThis as any).__forceHomeRefresh;
-        handleSilentBackgroundRefresh(); // Immediate refresh
-        return;
-      }
-      
-      // Force immediate refresh if no data
-      if (customers.length === 0 || transactionEntries.length === 0) {
-        console.log('🚨 No data detected - forcing immediate refresh');
-        handleSilentBackgroundRefresh(); // Immediate without timeout
+      // Only refresh if we don't have data yet (like statement page approach)
+      if (transactionEntries.length === 0 && user && !transactionLoading && !customersLoading) {
+        console.log('Dashboard: No data yet, refreshing...');
+        handleDataRefresh();
       } else {
-        setTimeout(() => handleSilentBackgroundRefresh(), 50); // Normal silent refresh
+        console.log('Dashboard: Data already available, skipping refresh');
       }
 
       return () => {
         console.log('Dashboard: Screen unfocused');
         setIsScreenFocused(false);
       };
-    }, [handleSilentBackgroundRefresh, customers.length, transactionEntries.length]) // Include data lengths for reactive updates
+    }, [transactionEntries.length, user, transactionLoading, customersLoading, handleDataRefresh])
   );
 
   // 🚀 CUSTOMER DETAIL APPROACH: No initial load needed - start fresh always
@@ -326,7 +205,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       setTransactionEntries(transactionsResult || []);
       
       // Force update counter to trigger re-calculation
-      setForceUpdate(prev => prev + 1);
+      // Data refreshed successfully
       console.log('🔄 Manual refresh completed, forcing UI update');
     } catch (error) {
       console.error('Dashboard: Error refreshing data:', error);
@@ -349,6 +228,10 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     console.log('Transactions loaded:', transactionEntries.length);
     console.log('🐛 DEBUG - Customers context loading state:', customersLoading);
     console.log('🐛 DEBUG - Transactions context loading state:', transactionLoading);
+    
+    // CRITICAL DEBUG: Log all customer names for deletion debugging
+    console.log('🔍 CURRENT CUSTOMERS IN DATABASE:', customers.map(c => c.name));
+    console.log('🔍 CURRENT TRANSACTION CUSTOMER NAMES:', [...new Set(transactionEntries.map(t => t.customer_name))]);
     
     // Log some sample transaction data for debugging
     if (transactionEntries.length > 0) {
@@ -422,7 +305,34 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       }
     });
     
-    return Array.from(customerMap.values()).sort((a, b) => {
+    // CRITICAL: Filter out customers with no transactions and deleted customers
+    const deletedCustomerName = (globalThis as any).__deletedCustomerName;
+    const validCustomers = Array.from(customerMap.values()).filter(customer => {
+      // Filter out explicitly deleted customer
+      if (deletedCustomerName && customer.name.toLowerCase().trim() === deletedCustomerName.toLowerCase().trim()) {
+        console.log('🗑️ FILTERING OUT explicitly deleted customer:', customer.name);
+        return false;
+      }
+      
+      // Only include customers that have actual transactions
+      const hasTransactions = customer.transactionCount > 0;
+      if (!hasTransactions) {
+        console.log('🗑️ FILTERING OUT customer with no transactions:', customer.name);
+        return false;
+      }
+      
+      return true;
+    });
+    
+    // Clear the deleted customer flag after first use
+    if (deletedCustomerName) {
+      console.log('🧹 Clearing deleted customer flag for:', deletedCustomerName);
+      delete (globalThis as any).__deletedCustomerName;
+    }
+    
+    console.log('📊 FINAL CUSTOMER LIST:', validCustomers.map(c => ({ name: c.name, balance: c.netBalance, transactions: c.transactionCount })));
+    
+    return validCustomers.sort((a, b) => {
       // Sort by most recent transaction/update time first (most recent first)
       const dateA = new Date(a.lastTransactionDate);
       const dateB = new Date(b.lastTransactionDate);
@@ -447,7 +357,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
       
       return nameA.localeCompare(nameB);
     });
-  }, [customers, transactionEntries, customerTransactionsCache]);
+  }, [customers, transactionEntries, customersLoading, transactionLoading]);
 
   // Filter function for search
   const filterPersons = (persons: PersonSummary[], query: string): PersonSummary[] => {
@@ -459,38 +369,11 @@ const DashboardScreen = React.memo(function DashboardScreen() {
 
 
 
-  // CRITICAL FIX: Cache customer summaries to prevent "All Settled" flash during navigation
+  // STATEMENT PAGE APPROACH: Simple direct calculation
   const allCustomers = React.useMemo(() => {
-    console.log('🔄 Recalculating customer summaries - forceUpdate:', forceUpdate);
-    
-    // Try to restore from global cache first
-    const globalCustomerCache = (globalThis as any).__customerSummariesCache;
-    const hasValidCache = globalCustomerCache && 
-                         Array.isArray(globalCustomerCache.summaries) && 
-                         globalCustomerCache.summaries.length > 0 &&
-                         globalCustomerCache.customersCount === customers.length &&
-                         globalCustomerCache.transactionsCount === transactionEntries.length;
-    
-    // If returning from statement page and we have valid cached data, use it immediately
-    if (hasValidCache && isReturningFromStatement) {
-      console.log('🚀 Dashboard: Restoring customer summaries from global cache:', globalCustomerCache.summaries.length, 'customers');
-      return globalCustomerCache.summaries;
-    }
-    
-    // Calculate fresh customer summaries
-    const freshSummaries = getCustomerSummaries();
-    
-    // Cache the result for future navigation
-    (globalThis as any).__customerSummariesCache = {
-      summaries: freshSummaries,
-      customersCount: customers.length,
-      transactionsCount: transactionEntries.length,
-      cachedAt: Date.now()
-    };
-    console.log('💾 Dashboard: Cached customer summaries:', freshSummaries.length, 'customers');
-    
-    return freshSummaries;
-  }, [getCustomerSummaries, forceUpdate, transactionEntries, customers, isReturningFromStatement]);
+    console.log('🔄 Calculating customer summaries (statement page approach)');
+    return getCustomerSummaries();
+  }, [getCustomerSummaries]);
   
 
   
@@ -503,43 +386,83 @@ const DashboardScreen = React.memo(function DashboardScreen() {
   
   const filteredCustomers = filterPersons(allCustomers, searchQuery);
 
-  const handlePersonPress = (person: PersonSummary) => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  // REMOVED: handlePersonPress function to eliminate any callback delays
+  // Navigation is now direct in onPress for maximum speed
+
+  // CRITICAL FIX: Create missing customers to fix data inconsistency
+  const fixMissingCustomers = useCallback(async () => {
+    if (!user || customersLoading || transactionLoading || transactionEntries.length === 0) {
+      return;
     }
-    
-    // SUPER FAST: Cache transaction data globally using our fast cache
-    const customerTransactions = customerTransactionsCache.get(person.name) || [];
-    (globalThis as any).__customerDetailCache = {
-      customerName: person.name,
-      transactions: customerTransactions,
-      cachedAt: Date.now()
-    };
-    
-    // INSTANT navigation - only pass minimal data
-    router.push({
-      pathname: '/(tabs)/(home)/customer-detail',
-      params: {
-        customerName: person.name,
-        customerPhone: person.name, // Using name as phone for now
-        // NO transactions JSON - using global cache instead
+
+    try {
+      console.log('🔧 Checking for missing customers...');
+      
+      // Get unique customer names from transactions
+      const transactionCustomerNames = [...new Set(transactionEntries.map(t => t.customer_name))];
+      const existingCustomerNames = customers.map(c => c.name.toLowerCase().trim());
+      
+      // Find customer names that exist in transactions but not in customers
+      const missingCustomerNames = transactionCustomerNames.filter(name => 
+        !existingCustomerNames.includes(name.toLowerCase().trim())
+      );
+      
+      if (missingCustomerNames.length > 0) {
+        console.log('🚨 Found missing customers:', missingCustomerNames);
+        
+        // Create missing customers
+        for (const customerName of missingCustomerNames) {
+          try {
+            console.log('Creating missing customer:', customerName);
+            await addCustomer({
+              name: customerName.trim(),
+              phone: null,
+              customer_type: 'customer' as 'customer' | 'supplier'
+            });
+            console.log('✅ Created missing customer:', customerName);
+          } catch (error) {
+            console.error('❌ Failed to create customer:', customerName, error);
+          }
+        }
+        
+        // Refresh customers list after creating missing ones
+        console.log('🔄 Refreshing customers list after creating missing customers');
+        await fetchCustomers();
+      } else {
+        console.log('✅ No missing customers found');
       }
-    });
-  };
+    } catch (error) {
+      console.error('Error fixing missing customers:', error);
+    }
+  }, [user, customers, transactionEntries, customersLoading, transactionLoading, addCustomer, fetchCustomers]);
+
+  // CRITICAL FIX: Run data consistency check when data is loaded
+  useEffect(() => {
+    if (!customersLoading && !transactionLoading && user && transactionEntries.length > 0 && customers.length > 0) {
+      // Run the fix after a short delay to ensure all data is settled
+      const timeoutId = setTimeout(() => {
+        fixMissingCustomers();
+      }, 1000);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [customersLoading, transactionLoading, user, transactionEntries.length, customers.length, fixMissingCustomers]);
 
 
 
 
-
-  // Calculate totals based on customer balances:
-  // TO RECEIVE (Green) = sum of all positive balances (customers owe you)
-  // TO GIVE (Red) = sum of all negative balances (you owe customers)
+  // STATEMENT PAGE APPROACH: Only calculate when we have real data (like statement page)
   let toReceive = 0;
   let toGive = 0;
-  let hasActualTransactionData = transactionEntries.length > 0;
+  let netBalance = 0;
+  let displayAmount = 0;
+  let currentStatus = '';
   
-  // Calculate current totals if we have data
-  if (hasActualTransactionData) {
+  // CRITICAL FIX: Show data when contexts are loaded, even if empty (like statement page approach)
+  const hasActualData = !customersLoading && !transactionLoading && user;
+  
+  if (hasActualData) {
+    // Calculate totals directly from customer balances (like statement page)
     allCustomers.forEach((customer: PersonSummary) => {
       if (customer.netBalance > 0) {
         toReceive += customer.netBalance;
@@ -547,50 +470,17 @@ const DashboardScreen = React.memo(function DashboardScreen() {
         toGive += Math.abs(customer.netBalance);
       }
     });
+    
+    // Calculate NET BALANCE for display
+    netBalance = toReceive - toGive;
+    displayAmount = Math.abs(netBalance);
+    currentStatus = netBalance > 0 ? t('toReceive') : netBalance < 0 ? t('toGive') : 
+                   (toReceive === 0 && toGive === 0) ? t('allSettled') : '';
+    
+    console.log('Dashboard: Calculated with real data:', { toReceive, toGive, netBalance, displayAmount, customersCount: allCustomers.length });
+  } else {
+    console.log('Dashboard: No data yet - showing empty state');
   }
-  
-  // PERSISTENT CACHE LOGIC: Initialize immediately if we have data, then NEVER reset
-  if (hasActualTransactionData || (!balanceRef.current.ready && allCustomers.length > 0)) {
-    // Calculate NET BALANCE: TO RECEIVE - TO GIVE
-    const netBalance = toReceive - toGive;
-    // Only show "All settled" if there's literally no transactions, not when balanced
-    const currentStatus = netBalance > 0 ? t('toReceive') : netBalance < 0 ? t('toGive') : 
-                         (toReceive === 0 && toGive === 0 && hasActualTransactionData) ? t('allSettled') : 
-                         balanceRef.current.lastStatus || (hasActualTransactionData ? t('allSettled') : 'Loading...');
-    
-    // Update cache with fresh data OR initialize on first load with customers
-    balanceRef.current = { 
-      toReceive, 
-      toGive, 
-      ready: true, 
-      lastStatus: currentStatus 
-    };
-    
-    // CRITICAL FIX: Store in global cache to prevent intermediate screen flash during navigation
-    (globalThis as any).__dashboardCache = { ...balanceRef.current };
-    console.log('Dashboard: Cache updated/initialized:', { toReceive, toGive, netBalance, ready: true, lastStatus: currentStatus });
-    
-    // Hide loading state immediately when real data is available
-    if (isReturningFromStatement && isCustomerDataLoading && hasActualTransactionData) {
-      console.log('🏠 Dashboard: Real data calculated - hiding loading state immediately');
-      setIsCustomerDataLoading(false);
-      setIsReturningFromStatement(false);
-    }
-  } else if (!balanceRef.current.ready && allCustomers.length === 0 && customers.length === 0) {
-    // True first-time load with no customers at all - show loading
-    balanceRef.current = { toReceive: 0, toGive: 0, ready: false, lastStatus: 'Loading...' };
-    console.log('Dashboard: First-time load, no customers');
-  }
-  // CRITICAL: Once ready=true, NEVER reset to false - always use cached values
-  
-  // Use cached values for rendering - persistent across navigation
-  const { toReceive: rcv, toGive: gve, ready, lastStatus } = balanceRef.current;
-  
-  // Calculate NET BALANCE for display: TO RECEIVE - TO GIVE
-  const netBalance = rcv - gve;
-  const displayAmount = Math.abs(netBalance);
-  
-  console.log('Dashboard: Using cached balance:', { rcv, gve, netBalance, displayAmount, ready, lastStatus, hasData: hasActualTransactionData });
 
   // Get initials for avatar
   const getInitials = (name: string): string => {
@@ -601,7 +491,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
     return (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
   };
 
-  const PersonCard = ({ person }: { person: PersonSummary }) => {
+  const PersonCard = React.memo(({ person }: { person: PersonSummary }) => {
     const isPositiveBalance = person.netBalance > 0;
     const balanceColor = isPositiveBalance ? '#10B981' : person.netBalance < 0 ? '#EF4444' : '#6B7280';
     const statusText = isPositiveBalance ? t('toReceive') : person.netBalance < 0 ? t('toGive') : t('allSettled');
@@ -627,10 +517,43 @@ const DashboardScreen = React.memo(function DashboardScreen() {
           borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
           shadowColor: isDark ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.08)',
         }]}
-        onPress={() => handlePersonPress(person)}
-        activeOpacity={0.6}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+
+        onPress={() => {
+          const startTime = Date.now();
+          console.log('🚀 Touch detected, starting navigation...');
+          
+          // INSTANT: Navigation first - absolute priority
+          router.push({
+            pathname: '/(tabs)/(home)/customer-detail',
+            params: {
+              customerName: person.name,
+              customerPhone: person.name,
+            }
+          });
+          
+          const navTime = Date.now() - startTime;
+          console.log(`✅ Navigation called after ${navTime}ms`);
+          
+          // Haptic feedback after navigation starts
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          }
+          
+          // Cache data after navigation (non-blocking)
+          setTimeout(() => {
+            const customerTransactions = transactionEntries.filter(t => t.customer_name === person.name);
+            (globalThis as any).__customerDetailCache = {
+              customerName: person.name,
+              transactions: customerTransactions,
+              cachedAt: Date.now()
+            };
+          }, 0);
+        }}
+        activeOpacity={0.2}
+        hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+        pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
         delayPressIn={0}
+        delayPressOut={0}
       >
         <LinearGradient
           colors={isDark 
@@ -646,6 +569,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                 : ['rgba(255, 255, 255, 0.95)', 'rgba(249, 250, 251, 1)']
           }
           style={styles.cardGradientOverlay}
+          pointerEvents="none"
         >
           <View style={styles.premiumCardContent}>
             <View style={styles.cardMainRow}>
@@ -698,6 +622,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                   }]}
                   onPress={(e) => {
                     e.stopPropagation();
+                    // INSTANT haptic feedback for maximum responsiveness
                     if (Platform.OS !== 'web') {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     }
@@ -732,9 +657,11 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                       });
                     }
                   }}
-                  activeOpacity={0.6}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  activeOpacity={0.2}
+                  hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
+                  pressRetentionOffset={{ top: 20, bottom: 20, left: 20, right: 20 }}
                   delayPressIn={0}
+                  delayPressOut={0}
                 >
                   {hasPhoneNumber ? (
                     <>
@@ -754,7 +681,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
         </LinearGradient>
       </TouchableOpacity>
     );
-  };
+  });
 
 
   return (
@@ -817,9 +744,7 @@ const DashboardScreen = React.memo(function DashboardScreen() {
             <View style={styles.balanceHeader}>
               <Text style={styles.modernBalanceLabel}>{t('netBalance')}</Text>
               <View style={styles.balanceIndicator}>
-                {!ready ? (
-                  <Clock size={16} color="#64748B" />
-                ) : netBalance > 0 ? (
+                {netBalance > 0 ? (
                   <TrendingUp size={16} color="#10B981" />
                 ) : netBalance < 0 ? (
                   <TrendingDown size={16} color="#EF4444" />
@@ -829,17 +754,15 @@ const DashboardScreen = React.memo(function DashboardScreen() {
               </View>
             </View>
             <Text style={[styles.modernBalanceAmount, {
-              color: !ready ? '#64748B' : 
-                     netBalance > 0 ? '#10B981' : netBalance < 0 ? '#EF4444' : '#64748B'
+              color: netBalance > 0 ? '#10B981' : netBalance < 0 ? '#EF4444' : '#64748B'
             }]}>
-              {!ready ? '---' : `रु ${displayAmount.toLocaleString('en-IN')}`}
+              {hasActualData ? `रु ${displayAmount.toLocaleString('en-IN')}` : '---'}
             </Text>
             <View style={styles.modernBalanceStatus}>
               <Text style={[styles.modernBalanceStatusText, {
-                color: !ready ? '#64748B' :
-                       netBalance > 0 ? '#10B981' : netBalance < 0 ? '#EF4444' : '#64748B'
+                color: netBalance > 0 ? '#10B981' : netBalance < 0 ? '#EF4444' : '#64748B'
               }]}>
-                {!ready ? 'Loading...' : lastStatus}
+                {hasActualData ? currentStatus : '---'}
               </Text>
             </View>
           </View>
@@ -853,16 +776,14 @@ const DashboardScreen = React.memo(function DashboardScreen() {
           </View>
           <View style={styles.quickStatDivider} />
           <View style={styles.quickStatItem}>
-            <Text style={styles.quickStatValue}>{allCustomers.filter((c: PersonSummary) => c.status === 'active').length}</Text>
+            <Text style={styles.quickStatValue}>{hasActualData ? allCustomers.filter((c: PersonSummary) => c.status === 'active').length : '---'}</Text>
             <Text style={styles.quickStatLabel}>{t('active')}</Text>
           </View>
           <View style={styles.quickStatDivider} />
           <View style={styles.quickStatItem}>
-            {(!isCustomerDataLoading || !isReturningFromStatement) ? (
-              <Text style={[styles.quickStatValue, { color: '#10B981' }]}>रु{' '}{rcv.toLocaleString('en-IN')}</Text>
-            ) : (
-              <Text style={[styles.quickStatValue, { color: theme.colors.textSecondary }]}>Loading...</Text>
-            )}
+            <Text style={[styles.quickStatValue, { color: '#10B981' }]}>
+              {hasActualData ? `रु ${toReceive.toLocaleString('en-IN')}` : '---'}
+            </Text>
             <Text style={styles.quickStatLabel}>{t('toReceive')}</Text>
           </View>
         </View>
@@ -886,11 +807,9 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                 </View>
                 <Text style={styles.summaryCardTitle}>{t('toReceive')}</Text>
               </View>
-              {(!isCustomerDataLoading || !isReturningFromStatement) ? (
-                <Text style={styles.summaryCardAmount}>रु{' '}{rcv.toLocaleString('en-IN')}</Text>
-              ) : (
-                <Text style={[styles.summaryCardAmount, { opacity: 0.7 }]}>Loading...</Text>
-              )}
+              <Text style={styles.summaryCardAmount}>
+                {hasActualData ? `रु ${toReceive.toLocaleString('en-IN')}` : '---'}
+              </Text>
               <View style={styles.summaryCardFooter}>
                 <Text style={styles.summaryCardSubtext}>{t('amountYoullReceive')}</Text>
               </View>
@@ -908,11 +827,9 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                 </View>
                 <Text style={styles.summaryCardTitle}>{t('toGive')}</Text>
               </View>
-              {(!isCustomerDataLoading || !isReturningFromStatement) ? (
-                <Text style={styles.summaryCardAmount}>रु{' '}{gve.toLocaleString('en-IN')}</Text>
-              ) : (
-                <Text style={[styles.summaryCardAmount, { opacity: 0.7 }]}>Loading...</Text>
-              )}
+              <Text style={styles.summaryCardAmount}>
+                {hasActualData ? `रु ${toGive.toLocaleString('en-IN')}` : '---'}
+              </Text>
               <View style={styles.summaryCardFooter}>
                 <Text style={styles.summaryCardSubtext}>{t('amountYouOwe')}</Text>
               </View>
@@ -934,13 +851,17 @@ const DashboardScreen = React.memo(function DashboardScreen() {
               <TouchableOpacity
                 style={[styles.retryButton, { backgroundColor: '#DC2626' }]}
                 onPress={() => {
+                  // INSTANT haptic feedback for maximum responsiveness
                   if (Platform.OS !== 'web') {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   }
                   handleRefresh(true); // Force refresh on retry
                 }}
-                activeOpacity={Platform.OS === 'ios' ? 0.6 : 0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.2}
+                hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+                pressRetentionOffset={{ top: 20, bottom: 20, left: 20, right: 20 }}
+                delayPressIn={0}
+                delayPressOut={0}
               >
                 <Text style={styles.retryButtonText}>
                   {(transactionError || customersError || '').includes('session has expired') ? 'Sign In Again' : 'Retry'}
@@ -978,14 +899,17 @@ const DashboardScreen = React.memo(function DashboardScreen() {
               <TouchableOpacity
                 style={styles.premiumAddButton}
                 onPress={() => {
+                  // INSTANT haptic feedback for maximum responsiveness
                   if (Platform.OS !== 'web') {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   }
                   handleAddCustomer();
                 }}
-                activeOpacity={0.6}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                activeOpacity={0.2}
+                hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+                pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
                 delayPressIn={0}
+                delayPressOut={0}
               >
                 <LinearGradient
                   colors={['#6366F1', '#4F46E5', '#4338CA']}
@@ -1006,6 +930,9 @@ const DashboardScreen = React.memo(function DashboardScreen() {
           style={styles.scrollableCustomerList} 
           contentContainerStyle={styles.customerListContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          removeClippedSubviews={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -1020,24 +947,8 @@ const DashboardScreen = React.memo(function DashboardScreen() {
             <View style={styles.premiumContentContainer}>
               {!transactionError && !customersError && (
                 <>
-                  {/* Loading indicator specifically for returning from statement pages */}
-                  {isCustomerDataLoading && isReturningFromStatement && (
-                    <View style={styles.customerLoadingContainer}>
-                      <View style={styles.customerLoadingCard}>
-                        <View style={styles.customerLoadingContent}>
-                          <View style={styles.loadingIconContainer}>
-                            <Text style={[styles.loadingIcon, { color: theme.colors.primary }]}>⟳</Text>
-                          </View>
-                          <Text style={[styles.customerLoadingText, { color: theme.colors.textSecondary }]}>
-                            Loading customers...
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  )}
-                  
-                  {/* Customer list - hide while loading from statement */}
-                  {(!isCustomerDataLoading || !isReturningFromStatement) && filteredCustomers.length > 0 ? (
+                  {/* Customer list - only show when we have real data */}
+                  {hasActualData && filteredCustomers.length > 0 ? (
                     <View style={styles.premiumCardsContainer}>
                       {filteredCustomers.map((person, index) => (
                         <View key={person.name} style={styles.premiumCardWrapper}>
@@ -1047,8 +958,8 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                     </View>
                   ) : null}
                   
-                  {/* Empty state for search or no customers - hide while loading from statement */}
-                  {(!isCustomerDataLoading || !isReturningFromStatement) && filteredCustomers.length === 0 && (
+                  {/* Empty state - show when no data or no filtered results */}
+                  {(!hasActualData || filteredCustomers.length === 0) && (
                     // CUSTOMER DETAIL APPROACH: Always show empty state when no data (no loading states)
                     <View style={styles.premiumEmptyState}>
                       <LinearGradient
@@ -1058,26 +969,31 @@ const DashboardScreen = React.memo(function DashboardScreen() {
                         <Users size={40} color="#6366F1" />
                       </LinearGradient>
                       <Text style={[styles.premiumEmptyTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
-                        {searchQuery.trim() ? t('noMatchesFound') : t('noCustomersYet')}
+                        {!hasActualData ? 'Loading...' : searchQuery.trim() ? t('noMatchesFound') : t('noCustomersYet')}
                       </Text>
                       <Text style={[styles.premiumEmptyDescription, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
-                        {searchQuery.trim() 
-                          ? `${t('noCustomersFoundMatching')} "${searchQuery}". ${t('tryDifferentSearchTerm')}`
-                          : t('addFirstCustomerDesc')
+                        {!hasActualData 
+                          ? 'Please wait while we load your data...'
+                          : searchQuery.trim() 
+                            ? `${t('noCustomersFoundMatching')} "${searchQuery}". ${t('tryDifferentSearchTerm')}`
+                            : t('addFirstCustomerDesc')
                         }
                       </Text>
                       {!searchQuery.trim() && (
                         <TouchableOpacity
                           style={styles.premiumEmptyButton}
                           onPress={() => {
+                            // INSTANT haptic feedback for maximum responsiveness
                             if (Platform.OS !== 'web') {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                             }
                             handleAddCustomer();
                           }}
-                          activeOpacity={0.6}
-                          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                          activeOpacity={0.2}
+                          hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+                          pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
                           delayPressIn={0}
+                          delayPressOut={0}
                         >
                           <LinearGradient
                             colors={['#6366F1', '#4F46E5']}
@@ -1827,15 +1743,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    minHeight: Platform.OS === 'android' ? 50 : 64,
+    // COMPACT: Reduced height for more customers in visible area
+    minHeight: Platform.OS === 'android' ? 58 : 64,
   },
   cardGradientOverlay: {
     flex: 1,
     borderRadius: 0, // Remove border radius for full width
   },
   premiumCardContent: {
-    paddingHorizontal: Platform.OS === 'android' ? 12 : 16,
-    paddingVertical: Platform.OS === 'android' ? 6 : 12,
+    // COMPACT: Reduced padding while keeping good touch targets
+    paddingHorizontal: Platform.OS === 'android' ? 14 : 16,
+    paddingVertical: Platform.OS === 'android' ? 8 : 10,
   },
   cardMainRow: {
     flexDirection: 'row',
@@ -1894,15 +1812,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   premiumAmountText: {
-    fontSize: Platform.OS === 'android' ? 16 : 20,
+    fontSize: Platform.OS === 'android' ? 15 : 18,
     fontWeight: '600' as const,
-    marginBottom: Platform.OS === 'android' ? 3 : 6,
+    marginBottom: Platform.OS === 'android' ? 2 : 4,
   },
   premiumCallButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Platform.OS === 'android' ? 6 : 10,
-    paddingVertical: Platform.OS === 'android' ? 3 : 6,
+    paddingHorizontal: Platform.OS === 'android' ? 5 : 8,
+    paddingVertical: Platform.OS === 'android' ? 2 : 4,
     borderRadius: 6,
     borderWidth: 1,
     gap: Platform.OS === 'android' ? 2 : 4,

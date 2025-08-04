@@ -304,9 +304,10 @@ export default function AddCustomerScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Add a small delay for smoother transition
+    // Use router.replace for smooth navigation like Settings -> Home
+    // This prevents dashboard re-mounting and loading states
     setTimeout(() => {
-      router.back();
+      router.replace('/(tabs)/(home)/dashboard');
     }, 100);
   };
 

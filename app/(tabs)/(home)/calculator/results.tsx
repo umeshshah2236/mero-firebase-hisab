@@ -31,6 +31,13 @@ const getCompactSpacing = (small: number, medium: number, large: number) => {
   return large;
 };
 
+// Get appropriate line height for better Nepali text rendering
+const getLineHeight = (baseFontSize: number, language: string) => {
+  // Nepali/Devanagari text needs more line height due to diacritics
+  const multiplier = language === 'ne' ? 1.8 : 1.4;
+  return Math.max(baseFontSize * multiplier, 20);
+};
+
 export default React.memo(function ResultsScreen() {
   const { t, language } = useLanguage();
   const { theme } = useTheme();
@@ -181,7 +188,7 @@ export default React.memo(function ResultsScreen() {
           <Text style={[styles.breakdownItemValue, {
             fontSize: getResponsiveSize(20, 22, 24),
           }]}>
-            {formatLocalizedCurrency(yearlyInterest, 'en')}
+            {formatLocalizedCurrency(yearlyInterest, language)}
           </Text>
         </View>
       )}
@@ -207,7 +214,7 @@ export default React.memo(function ResultsScreen() {
           <Text style={[styles.breakdownItemValue, {
             fontSize: getResponsiveSize(20, 22, 24),
           }]}>
-            {formatLocalizedCurrency(monthlyInterest, 'en')}
+            {formatLocalizedCurrency(monthlyInterest, language)}
           </Text>
         </View>
       )}
@@ -233,7 +240,7 @@ export default React.memo(function ResultsScreen() {
           <Text style={[styles.breakdownItemValue, {
             fontSize: getResponsiveSize(20, 22, 24),
           }]}>
-            {formatLocalizedCurrency(dailyInterest, 'en')}
+            {formatLocalizedCurrency(dailyInterest, language)}
           </Text>
         </View>
       )}
@@ -296,7 +303,7 @@ export default React.memo(function ResultsScreen() {
                   color: 'white',
                   fontWeight: '700',
                 }]}>
-                  {formatLocalizedCurrency(Math.abs(netBalance), 'en')}
+                  {formatLocalizedCurrency(Math.abs(netBalance), language)}
                 </Text>
               </View>
 
@@ -320,6 +327,7 @@ export default React.memo(function ResultsScreen() {
                   textAlign: 'center',
                   marginBottom: getCompactSpacing(12, 14, 16),
                   fontWeight: '500',
+                  lineHeight: getLineHeight(getResponsiveSize(12, 13, 14), language),
                 }]}>
                   {t('calculationBreakdownExplanation') || 'Here is the detailed breakdown of all transactions and calculated interest:'}
                 </Text>
@@ -328,14 +336,16 @@ export default React.memo(function ResultsScreen() {
                   <Text style={[styles.responsiveTransactionLabel, {
                     fontSize: getResponsiveSize(13, 14, 15),
                     fontWeight: '600',
+                    lineHeight: getLineHeight(getResponsiveSize(13, 14, 15), language),
                   }]}>
                     {t('totalGiven')} ({givenTransactionCount} {t('transactionCount')})
                   </Text>
                   <Text style={[styles.responsiveTransactionValue, {
                     fontSize: getResponsiveSize(14, 15, 16),
                     fontWeight: '700',
+                    lineHeight: getLineHeight(getResponsiveSize(14, 15, 16), language),
                   }]}>
-                    {formatLocalizedCurrency(principal, 'en')}
+                    {formatLocalizedCurrency(principal, language)}
                   </Text>
                 </View>
                 
@@ -343,14 +353,16 @@ export default React.memo(function ResultsScreen() {
                   <Text style={[styles.responsiveTransactionLabel, {
                     fontSize: getResponsiveSize(13, 14, 15),
                     fontWeight: '600',
+                    lineHeight: getLineHeight(getResponsiveSize(13, 14, 15), language),
                   }]}>
                     {t('totalReceived')} ({receivedTransactionCount} {t('transactionCount')})
                   </Text>
                   <Text style={[styles.responsiveTransactionValue, {
                     fontSize: getResponsiveSize(14, 15, 16),
                     fontWeight: '700',
+                    lineHeight: getLineHeight(getResponsiveSize(14, 15, 16), language),
                   }]}>
-                    {formatLocalizedCurrency(totalRepaymentAmount, 'en')}
+                    {formatLocalizedCurrency(totalRepaymentAmount, language)}
                   </Text>
                 </View>
                 
@@ -362,6 +374,7 @@ export default React.memo(function ResultsScreen() {
                     marginBottom: getCompactSpacing(8, 10, 12),
                     fontWeight: '500',
                     fontStyle: 'italic',
+                    lineHeight: getLineHeight(getResponsiveSize(12, 13, 13), language),
                   }]}>
                     {t('withInterestCalculation') || 'After adding interest calculations:'}
                   </Text>
@@ -370,6 +383,7 @@ export default React.memo(function ResultsScreen() {
                     <Text style={[styles.responsiveTransactionLabel, {
                       fontSize: getResponsiveSize(13, 14, 15),
                       fontWeight: '600',
+                      lineHeight: getLineHeight(getResponsiveSize(13, 14, 15), language),
                     }]}>
                       {t('totalAmountDueWithInterest')}
                     </Text>
@@ -377,8 +391,9 @@ export default React.memo(function ResultsScreen() {
                       fontSize: getResponsiveSize(14, 15, 16),
                       fontWeight: '700',
                       color: '#EF4444',
+                      lineHeight: getLineHeight(getResponsiveSize(14, 15, 16), language),
                     }]}>
-                      {formatLocalizedCurrency(finalAmount, 'en')}
+                      {formatLocalizedCurrency(finalAmount, language)}
                     </Text>
                   </View>
                   
@@ -386,6 +401,7 @@ export default React.memo(function ResultsScreen() {
                     <Text style={[styles.responsiveTransactionLabel, {
                       fontSize: getResponsiveSize(13, 14, 15),
                       fontWeight: '600',
+                      lineHeight: getLineHeight(getResponsiveSize(13, 14, 15), language),
                     }]}>
                       {t('totalRepaidWithInterest')}
                     </Text>
@@ -393,8 +409,9 @@ export default React.memo(function ResultsScreen() {
                       fontSize: getResponsiveSize(14, 15, 16),
                       fontWeight: '700',
                       color: '#10B981',
+                      lineHeight: getLineHeight(getResponsiveSize(14, 15, 16), language),
                     }]}>
-                      {formatLocalizedCurrency(totalRepaymentWithInterest, 'en')}
+                      {formatLocalizedCurrency(totalRepaymentWithInterest, language)}
                     </Text>
                   </View>
                 </View>
@@ -430,7 +447,7 @@ export default React.memo(function ResultsScreen() {
                   fontSize: getResponsiveSize(24, 26, 28),
                   fontWeight: '700',
                 }]}>
-                  {formatLocalizedCurrency(totalInterest, 'en')}
+                  {formatLocalizedCurrency(totalInterest, language)}
                 </Text>
               </View>
               
@@ -449,7 +466,7 @@ export default React.memo(function ResultsScreen() {
                   fontSize: getResponsiveSize(28, 30, 32),
                   fontWeight: '700',
                 }]}>
-                  {formatLocalizedCurrency(finalAmount, 'en')}
+                  {formatLocalizedCurrency(finalAmount, language)}
                 </Text>
                 
                 {/* Calculation Formula */}
@@ -461,7 +478,7 @@ export default React.memo(function ResultsScreen() {
                   fontWeight: '500',
                   lineHeight: 16,
                 }]}>
-                  {formatLocalizedCurrency(principal, 'en')} + {formatLocalizedCurrency(totalInterest, 'en')} = {formatLocalizedCurrency(finalAmount, 'en')}
+                  {formatLocalizedCurrency(principal, language)} + {formatLocalizedCurrency(totalInterest, language)} = {formatLocalizedCurrency(finalAmount, language)}
                 </Text>
               </View>
             </>
@@ -495,7 +512,7 @@ export default React.memo(function ResultsScreen() {
             <Text style={[styles.cardValue, {
               fontSize: getResponsiveSize(24, 26, 28),
             }]}>
-              {formatLocalizedCurrency(principal, 'en')}
+              {formatLocalizedCurrency(principal, language)}
             </Text>
           </View>
           
@@ -863,6 +880,8 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '500',
     textAlign: 'center',
+    lineHeight: 20, // Added line height for better Nepali text rendering
+    paddingVertical: 2, // Added padding to prevent clipping
   },
   breakdownSectionContainer: {
     flexDirection: 'row',
@@ -890,14 +909,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 8,
-    paddingVertical: 4,
+    paddingVertical: 6, // Increased padding for better Nepali text spacing
+    minHeight: 28, // Minimum height to prevent clipping
   },
   responsiveTransactionLabel: {
     flex: 1,
     marginRight: 12,
     color: '#64748B',
-    lineHeight: 18,
+    lineHeight: 24, // Increased for better Nepali text rendering
     flexWrap: 'wrap',
+    paddingVertical: 2, // Added padding to prevent clipping
   },
   responsiveTransactionValue: {
     color: '#1E40AF',
@@ -905,7 +926,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     minWidth: 80,
     maxWidth: '40%',
-    lineHeight: 18,
+    lineHeight: 24, // Increased for better Nepali text rendering
+    paddingVertical: 2, // Added padding to prevent clipping
   },
   compactBalanceCard: {
     borderRadius: 12,

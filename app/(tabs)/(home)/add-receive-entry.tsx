@@ -22,6 +22,7 @@ export default function AddReceiveEntryScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { updateTransactionEntry, deleteTransactionEntry, setFirebaseUser } = useTransactionEntries();
+  const { addCustomer, searchCustomers } = useCustomers();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
@@ -158,16 +159,58 @@ export default function AddReceiveEntryScreen() {
         (globalThis as any).__lastTransactionActivity = Date.now();
         // CRITICAL FIX: Invalidate customer cache since transaction was modified
         delete (globalThis as any).__customerSummariesCache;
-        router.back();
+        // Return to customer statement page if we came from there
+        if (customerName) {
+          router.replace({
+            pathname: '/(tabs)/(home)/customer-detail',
+            params: { customerName }
+          });
+        } else {
+          router.replace('/(tabs)/(home)/dashboard');
+        }
       } else {
         // Create new transaction entry using selected date
         const bsDateString = `${selectedDate.year}-${selectedDate.month.toString().padStart(2, '0')}-${selectedDate.day.toString().padStart(2, '0')}`;
+        
+        // CRITICAL FIX: Ensure customer exists before creating transactions
+        console.log('Checking if customer exists:', customerName.trim());
+        let actualCustomerId = customerId;
+        
+        if (!actualCustomerId || actualCustomerId === '') {
+          try {
+            // Search for existing customer by name
+            const existingCustomers = await searchCustomers(customerName.trim());
+            const existingCustomer = existingCustomers.find(c => 
+              c.name.toLowerCase() === customerName.trim().toLowerCase()
+            );
+            
+            if (existingCustomer) {
+              console.log('Found existing customer:', existingCustomer.id);
+              actualCustomerId = existingCustomer.id;
+            } else {
+              // Create new customer
+              console.log('Creating new customer for transaction...');
+              const newCustomer = await addCustomer({
+                name: customerName.trim(),
+                phone: customerPhone || null,
+                customer_type: 'supplier' as 'customer' | 'supplier' // Received transactions typically from suppliers
+              });
+              actualCustomerId = newCustomer.data?.id || '';
+              console.log('Created new customer with ID:', actualCustomerId);
+            }
+          } catch (customerError) {
+            console.error('Error handling customer:', customerError);
+            // If customer creation fails, we'll still proceed with the transaction
+            // but log the error for debugging
+            console.warn('Proceeding with transaction creation without customer link due to error:', customerError);
+          }
+        }
         
         // Save each entry as a separate transaction
         for (const entry of formData.entries) {
           const transactionData = {
             user_id: user.id,
-            customer_id: customerId, // Use the actual customer ID
+            customer_id: actualCustomerId, // Use the ensured customer ID
             customer_name: customerName,
             amount: parseFloat(entry.amount),
             transaction_type: 'received' as const,
@@ -191,7 +234,15 @@ export default function AddReceiveEntryScreen() {
         (globalThis as any).__lastTransactionActivity = Date.now();
         // CRITICAL FIX: Invalidate customer cache since transaction was modified
         delete (globalThis as any).__customerSummariesCache;
-        router.back();
+        // Return to customer statement page if we came from there
+        if (customerName) {
+          router.replace({
+            pathname: '/(tabs)/(home)/customer-detail',
+            params: { customerName }
+          });
+        } else {
+          router.replace('/(tabs)/(home)/dashboard');
+        }
       }
       
     } catch (error) {
@@ -317,9 +368,17 @@ export default function AddReceiveEntryScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    // Add a small delay for smoother transition
+    // If we have customerName, return to that customer's statement page
+    // Otherwise, go to dashboard
     setTimeout(() => {
-      router.back();
+      if (customerName) {
+        router.replace({
+          pathname: '/(tabs)/(home)/customer-detail',
+          params: { customerName }
+        });
+      } else {
+        router.replace('/(tabs)/(home)/dashboard');
+      }
     }, 100);
   };
   
@@ -356,8 +415,18 @@ export default function AddReceiveEntryScreen() {
           <View style={styles.headerCard}>
             <TouchableOpacity 
               style={styles.headerIconContainer}
-              onPress={handleGoBack}
-              activeOpacity={0.7}
+              onPress={() => {
+                // INSTANT haptic feedback for maximum responsiveness
+                if (Platform.OS !== 'web') {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }
+                handleGoBack();
+              }}
+              activeOpacity={0.2}
+              hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+              pressRetentionOffset={{ top: 30, bottom: 30, left: 30, right: 30 }}
+              delayPressIn={0}
+              delayPressOut={0}
             >
               <ArrowLeft size={24} color="#059669" />
             </TouchableOpacity>
