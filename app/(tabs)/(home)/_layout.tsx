@@ -1,8 +1,11 @@
 import { Stack } from "expo-router";
 import React from "react";
 import { Platform } from "react-native";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function HomeLayout() {
+  const { isAuthenticated } = useAuth();
+  
   return (
     <Stack screenOptions={{ 
       headerShown: false,
@@ -32,6 +35,7 @@ export default function HomeLayout() {
         headerShown: false, 
         headerTitle: 'Home', 
         title: 'Home',
+        gestureEnabled: false, // Always disable gestures on main home page - it's the root
         contentStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
         cardStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' }
       }} />

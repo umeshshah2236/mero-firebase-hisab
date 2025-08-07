@@ -223,12 +223,12 @@ export default React.memo(function CalculatorScreen() {
 
   return (
     <KeyboardAvoidingView 
-      style={{ flex: 1, backgroundColor: theme.colors.background }} 
+              style={{ flex: 1, backgroundColor: theme.colors.background }} 
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} style={{ flex: 1 }}>
         <ScrollView 
-          style={[styles.container, { backgroundColor: theme.colors.background }]} 
+                    style={[styles.container, { backgroundColor: theme.colors.background }]}
           contentContainerStyle={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
         <LinearGradient
           colors={['#1e40af', '#3b82f6']}
@@ -274,7 +274,7 @@ export default React.memo(function CalculatorScreen() {
         </LinearGradient>
         
         <View style={[styles.formContainer, { 
-          backgroundColor: theme.colors.background,
+                      backgroundColor: theme.colors.background,
           paddingHorizontal: getCompactSpacing(12, 16, 20),
           paddingTop: getCompactSpacing(4, 6, 8),
         }]}>

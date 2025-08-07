@@ -8,12 +8,12 @@ export default function KarobarLayout() {
       headerShown: false,
       gestureEnabled: Platform.OS === 'ios', // Disable gestures on Android
       gestureDirection: 'horizontal',
-      animation: Platform.OS === 'android' ? 'none' : 'slide_from_right', // No animation on Android
-      animationDuration: Platform.OS === 'android' ? 200 : 300, // Faster Android transitions
+      animation: 'none', // Force no animation for all platforms to prevent flash
+      animationDuration: 0, // Instant transitions
       animationTypeForReplace: 'push', // Consistent across platforms
-      // CRITICAL: Android background to eliminate white flash during slide transitions
-      contentStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
-      cardStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+      // CRITICAL: Force dark background for all platforms to eliminate white flash
+      contentStyle: { backgroundColor: '#0F172A' },
+      cardStyle: { backgroundColor: '#0F172A' },
       // CRITICAL: Custom Android interpolator to show karobar content during back animation
       ...(Platform.OS === 'android' && {
         cardStyleInterpolator: ({ current }) => {
@@ -50,8 +50,7 @@ export default function KarobarLayout() {
         }} 
       />
       <Stack.Screen name="results" options={{ 
-        headerShown: false, 
-        presentation: 'card',
+        headerShown: false,
         gestureEnabled: Platform.OS === 'ios', // Disable gestures on Android
         gestureDirection: 'horizontal',
         // CRITICAL: Android background to prevent white flash 

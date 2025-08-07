@@ -620,16 +620,33 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
 
   const signOut = async (): Promise<void> => {
     try {
+      console.log('Starting sign out process...');
+      
       // Clear state immediately for instant UI response
       setUser(null);
       setFirebaseUser(null);
       setIsLoading(false);
       
-      // Navigate directly to home immediately to avoid showing intermediate pages
-      setTimeout(() => {
-        const { router } = require('expo-router');
+      // CRITICAL: Reset navigation stack completely to prevent back navigation to authenticated pages
+      // Use router.replace with dismissAll to clear the entire stack
+      const { router } = require('expo-router');
+      
+      // Method 1: Try to dismiss all and navigate to fresh home
+      try {
+        // Clear any existing navigation state
+        if (router.canDismiss && router.canDismiss()) {
+          router.dismissAll();
+        }
+        
+        // Force navigate to clean home state
         router.replace('/(tabs)/(home)');
-      }, 100);
+        console.log('Navigation reset to home completed');
+      } catch (navError) {
+        console.warn('Primary navigation reset failed, trying fallback:', navError);
+        
+        // Fallback: Direct replace
+        router.replace('/(tabs)/(home)');
+      }
       
       // Sign out from Firebase in background (non-blocking)
       Promise.race([
@@ -637,9 +654,13 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthContextType => 
         new Promise((_, reject) => {
           setTimeout(() => reject(new Error('Sign out timeout')), Platform.OS === 'ios' ? 8000 : 5000);
         })
-      ]).catch((signOutError) => {
+      ]).then(() => {
+        console.log('Firebase sign out completed successfully');
+      }).catch((signOutError) => {
         console.warn('Firebase sign out timed out or failed, but local state cleared:', signOutError);
       });
+      
+      console.log('Sign out process completed');
     } catch (error) {
       console.error('Error during sign out process:', error);
       // Ensure state is cleared even if there's an error

@@ -2,18 +2,19 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useState } from "react";
-import { BackHandler, Platform } from "react-native";
+import React, { useEffect, useMemo, useLayoutEffect } from "react";
+import { BackHandler, Platform, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
-import { ThemeProvider } from "@/contexts/ThemeContext";
+import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 import { UserProfileProvider } from "@/contexts/UserProfileContext";
 import { CustomersProvider, useCustomers } from "@/contexts/CustomersContext";
 import { TransactionEntriesProvider, useTransactionEntries } from "@/contexts/TransactionEntriesContext";
 import { NetworkProvider } from "@/contexts/NetworkContext";
 import { testFirebaseConnectionDetailed } from "@/lib/firebase";
-import CustomSplashScreen from "@/components/SplashScreen";
+
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import NameInputModal from "@/components/NameInputModal";
 
@@ -39,6 +40,60 @@ function RootLayoutNav() {
   const { isAuthenticated, showNameInput, handleNameSet, setShowNameInput } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
+  const { theme, isDark } = useTheme();
+
+  // IMMEDIATE: Force consistent dark background for all calculator/karobar routes
+  const isCalculatorOrKarobar = pathname.includes('/calculator') || pathname.includes('/karobar');
+  const forceDarkBackground = Platform.OS === 'android' && isCalculatorOrKarobar;
+
+  // Calculator and karobar pages now have dark backgrounds to prevent white flash
+
+  // Check if tab bar should be hidden - more aggressive detection for immediate response
+  const shouldHideTabBar = React.useMemo(() => {
+    // Immediate detection for calculator and karobar to prevent flash
+    if (pathname.includes('/calculator') || pathname.includes('/karobar')) {
+      return true;
+    }
+    
+    return pathname.includes('/add-receive-entry') ||
+           pathname.includes('/add-give-entry') ||
+           pathname.includes('/edit-receive-entry') ||
+           pathname.includes('/edit-give-entry') ||
+           pathname.includes('/add-customer') ||
+           pathname.includes('/customer-form') ||
+           pathname.includes('/customer-detail');
+  }, [pathname]);
+
+  // Define safe area colors - ultra-conservative to prevent white flash
+  const safeAreaColors = React.useMemo(() => {
+    if (Platform.OS !== 'android') {
+      return {
+        backgroundColor: 'transparent',
+        borderTopColor: 'transparent'
+      };
+    }
+
+    // IMMEDIATE: Use the pre-calculated force flag for instant response
+    if (forceDarkBackground) {
+      return {
+        backgroundColor: '#0F172A',
+        borderTopColor: 'transparent'
+      };
+    }
+
+    // Only use light background on exact dashboard or settings page in light mode
+    const isExactDashboard = pathname === '/(tabs)/(home)/dashboard';
+    const isExactSettings = pathname === '/(tabs)/settings';
+    const isTabBarVisible = !shouldHideTabBar;
+    
+    const shouldUseLightBackground = !isDark && isTabBarVisible && (isExactDashboard || isExactSettings);
+
+    return {
+      backgroundColor: shouldUseLightBackground ? '#F8F9FA' : '#0F172A',
+      borderTopColor: shouldUseLightBackground ? 'rgba(0,0,0,0.08)' : 'transparent'
+    };
+  }, [isDark, shouldHideTabBar, pathname, forceDarkBackground]);
 
   // Navigation flow control - optimized for smooth transitions
   useEffect(() => {
@@ -87,22 +142,41 @@ function RootLayoutNav() {
 
   return (
     <>
-      <Stack screenOptions={{ 
-        headerBackTitle: "Back",
-        gestureEnabled: true,
-        animation: Platform.OS === 'android' ? 'none' : 'slide_from_right', // No animation on Android
-        animationDuration: Platform.OS === 'android' ? 200 : 300,
-        animationTypeForReplace: 'push', // Keep consistent
-        gestureDirection: 'horizontal',
-        // CRITICAL: Android background color to prevent white flash
-        contentStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
-        cardStyle: { backgroundColor: Platform.OS === 'android' ? '#0F172A' : 'transparent' },
+      <Stack 
+        initialRouteName="(tabs)"
+        screenOptions={{ 
+          headerBackTitle: "Back",
+          gestureEnabled: true,
+          animation: Platform.OS === 'android' ? 'none' : (forceDarkBackground ? 'none' : 'slide_from_right'), // No animation for calculator
+          animationDuration: Platform.OS === 'android' ? 200 : (forceDarkBackground ? 0 : 300),
+          animationTypeForReplace: 'push', // Keep consistent
+          gestureDirection: 'horizontal',
+        // CRITICAL: Use theme background to match destination pages and prevent flash
+        contentStyle: { 
+          backgroundColor: theme.colors.background,
+          paddingBottom: Platform.OS === 'android' ? Math.max(insets.bottom, 8) : insets.bottom,
+          // Make 3 buttons area solid gray in light mode (no faded design)
+          ...(Platform.OS === 'android' && !isDark && {
+            backgroundColor: '#E8E8E8', // Solid gray background
+          }),
+          // Make iOS bottom safe area white in light mode, except for Home and Settings pages
+          ...(Platform.OS === 'ios' && !isDark && {
+            backgroundColor: !shouldHideTabBar ? '#3B82F6' : '#FFFFFF', // Blue when tab bar is visible (Home/Settings), white when hidden (Calculator/etc)
+          }),
+          // Remove any shadows or borders for clean design
+          elevation: 0,
+          shadowOpacity: 0,
+          shadowRadius: 0,
+          shadowOffset: { width: 0, height: 0 },
+        },
+        cardStyle: { backgroundColor: theme.colors.background },
+        sceneContainerStyle: { backgroundColor: theme.colors.background },
         // CRITICAL: Disable complex animations - use simple fade for Android
         ...(Platform.OS === 'android' && {
           cardStyleInterpolator: ({ current, next, layouts }) => {
             return {
               cardStyle: {
-                backgroundColor: '#0F172A',
+                backgroundColor: theme.colors.background,
                 opacity: 1, // Always opaque
                 transform: [
                   {
@@ -112,6 +186,10 @@ function RootLayoutNav() {
                     }),
                   },
                 ],
+              },
+              overlayStyle: {
+                backgroundColor: theme.colors.background,
+                opacity: 1,
               },
             };
           },
@@ -197,10 +275,6 @@ function ContextSyncProvider({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
-  const [isAppReady, setIsAppReady] = useState(false);
-  const [showCustomSplash, setShowCustomSplash] = useState(true);
-  const [splashFinished, setSplashFinished] = useState(false);
-
   useEffect(() => {
     const initializeApp = async () => {
       try {
@@ -208,7 +282,7 @@ export default function RootLayout() {
         
         // iOS-specific initialization delay to prevent crashes
         if (Platform.OS === 'ios') {
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
         
         // Test Firebase connection in background without blocking
@@ -224,7 +298,7 @@ export default function RootLayout() {
           console.warn('App will continue with limited functionality');
         });
         
-        // Hide native splash immediately since we're using custom splash
+        // Hide native splash immediately and load app directly
         SplashScreen.hideAsync();
         
       } catch (error) {
@@ -236,26 +310,12 @@ export default function RootLayout() {
     initializeApp();
   }, []);
 
-  const handleSplashFinish = () => {
-    // Ensure app is ready before allowing splash to finish
-    setIsAppReady(true);
-    setSplashFinished(true);
-    setShowCustomSplash(false);
-  };
-
-  // Show splash screen until both conditions are met
-  if (showCustomSplash || !splashFinished) {
-    return <CustomSplashScreen onFinish={handleSplashFinish} />;
-  }
-
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <StatusBar 
-          style="light" 
-          backgroundColor="#0F172A"
+          style="auto" 
           translucent={false}
-          barStyle="light-content"
           hidden={false}
         />
                         <ThemeProvider>
@@ -267,7 +327,9 @@ export default function RootLayout() {
                             <TransactionEntriesProvider>
                               <ContextSyncProvider>
                                 <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0F172A' }}>
-                                  <RootLayoutNav />
+                                  <View style={{ flex: 1, backgroundColor: '#0F172A' }}>
+                                    <RootLayoutNav />
+                                  </View>
                                 </GestureHandlerRootView>
                               </ContextSyncProvider>
                             </TransactionEntriesProvider>
